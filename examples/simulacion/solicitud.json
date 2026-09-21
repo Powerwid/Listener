@@ -1,0 +1,9 @@
+{
+  "referenciaExterna": "DEMO-001",
+  "referenciaConductor": "CONDUCTOR-001",
+  "montoEsperado": 25.00,
+  "moneda": "PEN",
+  "medioPago": "YAPE",
+  "referenciaCuentaReceptora": "TONYSGO-RECAUDACION",
+  "operacionDeclarada": "DEMO-OP-001"
+}

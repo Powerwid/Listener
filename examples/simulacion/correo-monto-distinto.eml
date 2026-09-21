@@ -1,0 +1,20 @@
+From: Simulador Listener <simulador@example.invalid>
+To: simulacion@listener.invalid
+Subject: [SIMULACION] Importe diferente al declarado
+Date: Fri, 04 Sep 2026 12:00:00 +0000
+Message-ID: <demo-002@example.invalid>
+X-Listener-Demo: v1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+REFERENCIA_SOLICITUD: DEMO-002
+REFERENCIA_CONDUCTOR: CONDUCTOR-001
+PROVEEDOR: BCP
+NUMERO_OPERACION: DEMO-OP-002
+CUENTA_RECEPTORA: TONYSGO-RECAUDACION
+MONTO: 25.00
+MONEDA: PEN
+FECHA_OPERACION: 2026-09-04T12:00:00Z
+DIRECCION: INGRESO
+ESTADO: COMPLETADO
