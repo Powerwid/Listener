@@ -1,10 +1,15 @@
 using Listener.Api.Diagnostics;
+using Listener.Api.Configuration;
 using Listener.Api.Data;
 using Listener.Api.Simulation;
 using Listener.Api.Email;
 using Listener.Api.Panel;
 using Listener.Api.Automatic;
+using Listener.Api.Security;
+using Listener.Api.Yape;
 using Microsoft.EntityFrameworkCore;
+
+LocalEnvironment.Load();
 
 // One-off local check: no HTTP endpoint and no persisted mailbox credentials.
 if (args.Contains("--test-gmail", StringComparer.Ordinal)
@@ -56,7 +61,12 @@ builder.Services.AddSingleton<AutomaticState>();
 builder.Services.AddSingleton<IAutomaticMailbox, AutomaticMailbox>();
 builder.Services.AddSingleton<NotificationStore>();
 builder.Services.AddScoped<NotificationQueries>();
+builder.Services.AddScoped<YapeVerificationService>();
+builder.Services.AddSingleton<ApiKeyValidator>();
+builder.Services.AddSingleton<TonysGoCallbackDispatcher>();
+builder.Services.AddHttpClient("TonysGoCallback", client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHostedService<AutomaticReaderWorker>();
+builder.Services.AddHostedService<TonysGoCallbackWorker>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 

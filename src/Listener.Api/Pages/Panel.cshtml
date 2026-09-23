@@ -51,7 +51,29 @@
                 <p class="upload-note">Compatible con yapeos recibidos y consumos BCP. Las transferencias aún requieren una plantilla de ejemplo.</p>
             </section>
         </div>
+        <section id="android-live-debug" class="card debug-console" hidden>
+            <div class="section-heading"><div><h2>Depuración en vivo de Yape</h2><p>Intentos de consulta y nuevas notificaciones detectadas por esta página.</p></div><span id="android-debug-state" class="mode-label">Iniciando…</span></div>
+            <pre id="android-debug-log" aria-live="polite">Esperando la primera consulta…</pre>
+        </section>
         <section id="results" class="results-section">
+            <section class="android-results">
+                <div class="section-heading"><div><h2>Yapes recibidos desde Android</h2><p>Notificaciones capturadas por el teléfono y almacenadas en ListenerDb.</p></div><span class="mode-label">@Model.AndroidYapeNotifications.Count registros</span></div>
+                @if (Model.AndroidYapeNotifications.Count == 0)
+                {
+                    <div class="empty"><span>⌕</span><h3>Aún no hay notificaciones Android</h3><p>Comprueba el permiso de notificaciones, la conexión ADB y el estado HTTP 200 en el teléfono.</p></div>
+                }
+                else
+                {
+                    <div class="table-wrap"><table><thead><tr><th>Estado</th><th>Notificación</th><th>Importe</th><th>Fecha (Perú)</th><th>Detalle</th></tr></thead><tbody>
+                    @foreach (var item in Model.AndroidYapeNotifications)
+                    {
+                        var processed = item.Estado == "Procesado";
+                        <tr data-yape-notification-id="@item.Id"><td><span class="badge @(processed ? "income" : "bad")">@item.Estado</span></td><td><strong>@(item.Titulo ?? "Notificación Yape")</strong><small>@(item.Pagador ?? "Pagador no extraído")</small></td><td class="money">@(item.Monto is decimal amount ? $"PEN {amount.ToString("N2", CultureInfo.GetCultureInfo("es-PE"))}" : "—")</td><td>@item.FechaNotificacion.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm")</td><td><details><summary>Ver datos</summary><dl><dt>Motivo</dt><dd>@(item.CodigoMotivo ?? "Sin motivo")</dd><dt>Código</dt><dd>@(item.CodigoSeguridad ?? "No presente en la notificación")</dd><dt>Extractor</dt><dd>@item.VersionExtractor</dd><dt>Registrado</dt><dd>@item.FechaRegistro.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm:ss")</dd></dl></details></td></tr>
+                    }
+                    </tbody></table></div>
+                }
+            </section>
+            <div class="results-divider"></div>
             <div class="section-heading"><div><h2>Resultado de la lectura</h2><p>Extraer los datos de un ingreso no autoriza una recarga.</p></div>@if (Model.Report is not null) { <form method="post" asp-page-handler="Download"><textarea name="reportJson" hidden>@Model.ReportJson</textarea><button id="download-json" type="submit" class="button secondary">Descargar JSON ↓</button></form> }</div>
             <div class="metrics">
                 <div class="metric"><span>Ingresos extraídos</span><strong>@(Model.Report?.IngresosExtraidos.Count.ToString() ?? "—")</strong><small>Yapeos con datos consistentes</small></div>

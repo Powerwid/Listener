@@ -101,6 +101,8 @@ function showView(results, push = false) {
   document.querySelector('#results').hidden = !results;
   resultsIntro.hidden = !results;
   refreshStatus.hidden = !results;
+  const androidDebug = document.querySelector('#android-live-debug');
+  if (androidDebug) androidDebug.hidden = !results;
   readerLink?.classList.toggle('active', !results);
   resultsLink?.classList.toggle('active', results);
   [readerLink, resultsLink].forEach(link => {
@@ -174,3 +176,59 @@ refreshAutomaticStatus();
 setInterval(() => {
   if (isResultsView && reportIsPersistent() && !document.hidden) refreshSavedResults();
 }, 10000);
+
+const knownYapeNotifications = new Map();
+const yapeDebugLines = [];
+
+function appendYapeDebug(message, details) {
+  const time = new Date().toLocaleTimeString('es-PE');
+  const line = `${time} ${message}${details ? ` · ${details}` : ''}`;
+  yapeDebugLines.unshift(line);
+  if (yapeDebugLines.length > 80) yapeDebugLines.length = 80;
+  const output = document.querySelector('#android-debug-log');
+  if (output) output.textContent = yapeDebugLines.join('\n');
+}
+
+async function pollAndroidYapeNotifications() {
+  if (!isResultsView || document.hidden) return;
+  const state = document.querySelector('#android-debug-state');
+  const started = new Date();
+  console.info('[Yape Listener Web] Intentando consultar notificaciones Android', started.toISOString());
+  appendYapeDebug('Intentando consultar la API de notificaciones Android');
+  if (state) state.textContent = 'Consultando…';
+  try {
+    const response = await fetch('/api/notificaciones/yape', {cache:'no-store'});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const items = Array.isArray(payload.resultados) ? payload.resultados : [];
+    for (const item of [...items].reverse()) {
+      const fingerprint = `${item.estado}|${item.codigoMotivo}|${item.monto ?? ''}`;
+      const previous = knownYapeNotifications.get(item.id);
+      if (previous === undefined) {
+        console.info('[Yape Listener Web] Notificación Yape detectada', {
+          id: item.id, estado: item.estado, monto: item.monto,
+          motivo: item.codigoMotivo, extractor: item.versionExtractor
+        });
+        appendYapeDebug('Notificación detectada',
+          `id=${String(item.id).slice(0, 8)} estado=${item.estado} monto=${item.monto ?? '—'} motivo=${item.codigoMotivo ?? '—'}`);
+      } else if (previous !== fingerprint) {
+        console.info('[Yape Listener Web] Notificación Yape actualizada', {
+          id: item.id, estado: item.estado, monto: item.monto, motivo: item.codigoMotivo
+        });
+        appendYapeDebug('Notificación actualizada',
+          `id=${String(item.id).slice(0, 8)} estado=${item.estado} motivo=${item.codigoMotivo ?? '—'}`);
+      }
+      knownYapeNotifications.set(item.id, fingerprint);
+    }
+    console.info(`[Yape Listener Web] Consulta terminada: ${items.length} registro(s)`);
+    appendYapeDebug('Consulta completada', `${items.length} registro(s)`);
+    if (state) state.textContent = `${items.length} registros · ${new Date().toLocaleTimeString('es-PE')}`;
+  } catch (error) {
+    console.error('[Yape Listener Web] Error consultando notificaciones Android', error);
+    appendYapeDebug('Error de consulta', error.message || 'desconocido');
+    if (state) state.textContent = 'Error de consulta';
+  }
+}
+
+pollAndroidYapeNotifications();
+setInterval(pollAndroidYapeNotifications, 3000);

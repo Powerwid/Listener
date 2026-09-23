@@ -23,6 +23,7 @@ public class PanelModel(AutomaticState automatic, NotificationQueries queries) :
     public EmailReadReport? Report { get; private set; }
     public string? Notice { get; private set; }
     public string? Failure { get; private set; }
+    public IReadOnlyList<StoredAndroidYapeNotification> AndroidYapeNotifications { get; private set; } = [];
     public AutomaticStatus AutomaticStatus => automatic.Status;
     public string ReportJson => JsonSerializer.Serialize(Report, BcpEmailCommand.JsonOptions);
     public IEnumerable<(string Group, EmailReadItem Item)> Rows => Report is null ? [] :
@@ -42,6 +43,7 @@ public class PanelModel(AutomaticState automatic, NotificationQueries queries) :
         try
         {
             var stored = await queries.LatestAsync(HttpContext.RequestAborted);
+            AndroidYapeNotifications = await queries.LatestAndroidYapeAsync(HttpContext.RequestAborted);
             Report = EmailReadReport.Create(stored.Select(x => new EmailReadItem(x.Id.ToString(), x.Datos, x.Error)).ToArray())
                 with { Origen = "BaseDeDatos", Persistido = true, Limite = 100 };
         }
