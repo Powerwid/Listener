@@ -23,7 +23,9 @@ public sealed record StoredAndroidYapeNotification(
     string? VersionExtractor,
     decimal? Monto,
     string? Pagador,
-    string? CodigoSeguridad);
+    string? CodigoSeguridad,
+    string? Texto,
+    string? Detalle);
 
 public sealed class NotificationQueries(ListenerDbContext db)
 {
@@ -80,6 +82,8 @@ public sealed class NotificationQueries(ListenerDbContext db)
             row.VersionExtractor,
             evidence?.Monto ?? parsed?.Monto,
             evidence?.ReferenciaPagador ?? parsed?.Pagador,
-            evidence?.ReferenciaSolicitudExtraida ?? parsed?.CodigoSeguridad);
+            evidence?.ReferenciaSolicitudExtraida ?? parsed?.CodigoSeguridad,
+            parsed?.Text,
+            parsed?.BigText);
     }
 }

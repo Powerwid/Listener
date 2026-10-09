@@ -72,10 +72,10 @@ public static partial class YapeNotificationParser
     [GeneratedRegex(@"(?:S/|S\.)\s*(?<value>(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 1000)]
     private static partial Regex AmountRegex();
 
-    [GeneratedRegex(@"\bc[oó]digo(?:\s+de\s+(?:seguridad|operaci[oó]n|yapeo))?\s*[:#-]?\s*(?<value>[0-9]{3})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 1000)]
+    [GeneratedRegex(@"\bc[oó]d(?:igo|\.)(?:\s+de\s+(?:seguridad|operaci[oó]n|yapeo))?\s*(?:es\s*)?[:#-]?\s*(?<value>[0-9]{3})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 1000)]
     private static partial Regex SecurityCodeRegex();
 
-    [GeneratedRegex(@"(?:\byape!\s+(?<value>[\p{L}][\p{L}\p{M} .'-]{1,100}?)(?=\s+te\s+envi[oó]\s+un\s+pago\b)|\b(?:de|enviado\s+por)\s+(?<value>[\p{L}][\p{L}\p{M} .'-]{1,100}?)(?=\s+(?:por|c[oó]digo|operaci[oó]n|S/|S\.|$)))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 1000)]
+    [GeneratedRegex(@"(?:(?:\byape!|\bconfirmaci[oó]n\s+de\s+pago)\s+(?<value>[\p{L}][\p{L}\p{M} .'* -]{1,100}?)(?=\s+te\s+envi[oó]\s+un\s+pago\b)|\b(?:de|enviado\s+por)\s+(?<value>[\p{L}][\p{L}\p{M} .'-]{1,100}?)(?=\s+(?:por|c[oó]digo|operaci[oó]n|S/|S\.|$)))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 1000)]
     private static partial Regex PayerRegex();
 
     [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant, 1000)]

@@ -12,8 +12,8 @@ namespace Listener.Api.Yape;
 
 public sealed class YapeVerificationService(ListenerDbContext db, IConfiguration configuration)
 {
-    // Increment when parsing rules change so active Android notifications that
-    // were rejected by an older parser can be ingested again safely.
+    // Keep the ingest identity stable: replaying an old notification must not
+    // create a second payment evidence just because parsing rules changed.
     private const string Extractor = "android-yape-v2";
 
     public async Task<NotificationIngestResult> IngestAsync(YapeNotificationRequest input, CancellationToken ct)

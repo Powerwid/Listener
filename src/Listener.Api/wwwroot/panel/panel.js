@@ -179,6 +179,9 @@ setInterval(() => {
 
 const knownYapeNotifications = new Map();
 const yapeDebugLines = [];
+let lastYapeCount = null;
+let lastYapeError = null;
+let yapePollInFlight = false;
 
 function appendYapeDebug(message, details) {
   const time = new Date().toLocaleTimeString('es-PE');
@@ -190,11 +193,9 @@ function appendYapeDebug(message, details) {
 }
 
 async function pollAndroidYapeNotifications() {
-  if (!isResultsView || document.hidden) return;
+  if (!isResultsView || document.hidden || yapePollInFlight) return;
+  yapePollInFlight = true;
   const state = document.querySelector('#android-debug-state');
-  const started = new Date();
-  console.info('[Yape Listener Web] Intentando consultar notificaciones Android', started.toISOString());
-  appendYapeDebug('Intentando consultar la API de notificaciones Android');
   if (state) state.textContent = 'Consultando…';
   try {
     const response = await fetch('/api/notificaciones/yape', {cache:'no-store'});
@@ -220,13 +221,21 @@ async function pollAndroidYapeNotifications() {
       }
       knownYapeNotifications.set(item.id, fingerprint);
     }
-    console.info(`[Yape Listener Web] Consulta terminada: ${items.length} registro(s)`);
-    appendYapeDebug('Consulta completada', `${items.length} registro(s)`);
+    if (lastYapeCount !== items.length || lastYapeError !== null)
+      appendYapeDebug('Consulta completada', `${items.length} registro(s)`);
+    lastYapeCount = items.length;
+    lastYapeError = null;
     if (state) state.textContent = `${items.length} registros · ${new Date().toLocaleTimeString('es-PE')}`;
   } catch (error) {
-    console.error('[Yape Listener Web] Error consultando notificaciones Android', error);
-    appendYapeDebug('Error de consulta', error.message || 'desconocido');
+    const message = error.message || 'desconocido';
+    if (lastYapeError !== message) {
+      console.error('[Yape Listener Web] Error consultando notificaciones Android', error);
+      appendYapeDebug('Error de consulta', message);
+    }
+    lastYapeError = message;
     if (state) state.textContent = 'Error de consulta';
+  } finally {
+    yapePollInFlight = false;
   }
 }
 

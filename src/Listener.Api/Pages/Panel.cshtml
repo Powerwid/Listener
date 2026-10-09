@@ -57,7 +57,7 @@
         </section>
         <section id="results" class="results-section">
             <section class="android-results">
-                <div class="section-heading"><div><h2>Yapes recibidos desde Android</h2><p>Notificaciones capturadas por el teléfono y almacenadas en ListenerDb.</p></div><span class="mode-label">@Model.AndroidYapeNotifications.Count registros</span></div>
+                <div class="section-heading"><div><h2>Yapes recibidos desde Android</h2><p>Notificaciones capturadas por el teléfono y almacenadas en ListenerDb. Recibir una notificación no autoriza una recarga.</p></div><span class="mode-label">@Model.AndroidYapeNotifications.Count registros</span></div>
                 @if (Model.AndroidYapeNotifications.Count == 0)
                 {
                     <div class="empty"><span>⌕</span><h3>Aún no hay notificaciones Android</h3><p>Comprueba el permiso de notificaciones, la conexión ADB y el estado HTTP 200 en el teléfono.</p></div>
@@ -68,7 +68,9 @@
                     @foreach (var item in Model.AndroidYapeNotifications)
                     {
                         var processed = item.Estado == "Procesado";
-                        <tr data-yape-notification-id="@item.Id"><td><span class="badge @(processed ? "income" : "bad")">@item.Estado</span></td><td><strong>@(item.Titulo ?? "Notificación Yape")</strong><small>@(item.Pagador ?? "Pagador no extraído")</small></td><td class="money">@(item.Monto is decimal amount ? $"PEN {amount.ToString("N2", CultureInfo.GetCultureInfo("es-PE"))}" : "—")</td><td>@item.FechaNotificacion.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm")</td><td><details><summary>Ver datos</summary><dl><dt>Motivo</dt><dd>@(item.CodigoMotivo ?? "Sin motivo")</dd><dt>Código</dt><dd>@(item.CodigoSeguridad ?? "No presente en la notificación")</dd><dt>Extractor</dt><dd>@item.VersionExtractor</dd><dt>Registrado</dt><dd>@item.FechaRegistro.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm:ss")</dd></dl></details></td></tr>
+                        var ready = processed && item.CodigoMotivo == "NOTIFICACION_LISTA_PARA_COMPARAR";
+                        var label = !processed ? "Descartada" : ready ? "Datos extraídos" : "Por revisar";
+                        <tr data-yape-notification-id="@item.Id"><td><span class="badge @(ready ? "income" : processed ? "" : "bad")">@label</span></td><td><strong>@(item.Titulo ?? "Notificación Yape")</strong><small>@(item.Pagador ?? "Pagador no extraído")</small></td><td class="money">@(item.Monto is decimal amount ? $"PEN {amount.ToString("N2", CultureInfo.GetCultureInfo("es-PE"))}" : "—")</td><td>@item.FechaNotificacion.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm")</td><td><details><summary>Ver datos</summary><dl><dt>Motivo</dt><dd>@(item.CodigoMotivo ?? "Sin motivo")</dd><dt>Código</dt><dd>@(item.CodigoSeguridad ?? "No presente en la notificación")</dd><dt>Texto recibido</dt><dd>@(item.Texto ?? "No disponible")</dd><dt>Detalle recibido</dt><dd>@(item.Detalle ?? "No disponible")</dd><dt>Extractor</dt><dd>@item.VersionExtractor</dd><dt>Registrado</dt><dd>@item.FechaRegistro.ToOffset(TimeSpan.FromHours(-5)).ToString("dd/MM/yyyy HH:mm:ss")</dd></dl></details></td></tr>
                     }
                     </tbody></table></div>
                 }

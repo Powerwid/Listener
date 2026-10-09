@@ -6,6 +6,7 @@ using Android.Text;
 using Android.Views;
 using Android.Views.InputMethods;
 using Android.Widget;
+using System.Net.Http;
 
 namespace TonysGo.YapeListener.Android;
 
@@ -20,8 +21,13 @@ public sealed class MainActivity : Activity
     private EditText? _device;
     private EditText? _apiKey;
     private TextView? _status;
+    private TextView? _connectionResult;
     private TextView? _debugLog;
     private CancellationTokenSource? _refreshCancellation;
+    private static readonly HttpClient ConnectionClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -60,6 +66,9 @@ public sealed class MainActivity : Activity
         var refresh = new Button(this) { Text = "Actualizar estado" };
         refresh.Click += (_, _) => UpdateStatus();
 
+        var testConnection = new Button(this) { Text = "Probar conexion con Listener" };
+        testConnection.Click += async (_, _) => await TestConnectionAsync(testConnection);
+
         var clearLog = new Button(this) { Text = "Limpiar registro de depuracion" };
         clearLog.Click += (_, _) =>
         {
@@ -68,6 +77,8 @@ public sealed class MainActivity : Activity
         };
 
         _status = new TextView(this);
+        _connectionResult = new TextView(this);
+        _connectionResult.SetTextIsSelectable(true);
         _debugLog = new TextView(this)
         {
             TextSize = 11
@@ -89,6 +100,8 @@ public sealed class MainActivity : Activity
         root.AddView(save);
         root.AddView(permissions);
         root.AddView(refresh);
+        root.AddView(testConnection);
+        root.AddView(_connectionResult);
         root.AddView(_status);
         root.AddView(clearLog);
         root.AddView(debugScroll);
@@ -141,6 +154,38 @@ public sealed class MainActivity : Activity
 
         ListenerConfig.Save(this, settings);
         SetStatus("Configuracion guardada. Habilita ahora el acceso a notificaciones.");
+    }
+
+    private async Task TestConnectionAsync(Button button)
+    {
+        var settings = ListenerConfig.Load(this);
+        if (!settings.IsValid)
+        {
+            _connectionResult!.Text = "Guarda primero una URL, dispositivo y clave validos.";
+            return;
+        }
+
+        button.Enabled = false;
+        _connectionResult!.Text = "Consultando Listener...";
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get, $"{settings.Endpoint}/api/v1/yape/connection");
+            request.Headers.Add("X-Listener-Api-Key", settings.ApiKey);
+            using var response = await ConnectionClient.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            _connectionResult.Text = $"HTTP {(int)response.StatusCode}\n{json[..Math.Min(json.Length, 1024)]}";
+            ListenerDebugLog.Info(this, $"Prueba de conexion: HTTP {(int)response.StatusCode}.");
+        }
+        catch (Exception ex)
+        {
+            _connectionResult.Text = $"Sin respuesta de Listener: {ex.GetType().Name}: {ex.Message}";
+            ListenerDebugLog.Warning(this, $"Prueba de conexion fallida: {ex.GetType().Name}.");
+        }
+        finally
+        {
+            button.Enabled = true;
+        }
     }
 
     private void UpdateStatus()

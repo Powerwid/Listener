@@ -11,6 +11,22 @@ public sealed class YapeController(
     ApiKeyValidator apiKeys,
     ILogger<YapeController> logger) : ControllerBase
 {
+    [HttpGet("connection")]
+    [ResponseCache(NoStore = true)]
+    public IActionResult CheckCollectorConnection()
+    {
+        var denied = Authorize(ApiClient.AndroidCollector);
+        if (denied is not null) return denied;
+
+        return Ok(new
+        {
+            conectado = true,
+            servicio = "Listener",
+            origen = "AndroidCollector",
+            fechaServidorUtc = DateTimeOffset.UtcNow
+        });
+    }
+
     [HttpPost("notifications")]
     public async Task<IActionResult> ReceiveNotification([FromBody] YapeNotificationRequest request, CancellationToken ct)
     {

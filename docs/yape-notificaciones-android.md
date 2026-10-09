@@ -15,6 +15,17 @@
 El orden no importa: la solicitud de TonysGo puede llegar antes o despues de la
 notificacion. Las referencias de TonysGo y los eventos Android son idempotentes.
 
+Android envia el titulo y el texto completo disponible en `android.text` y
+`android.bigText` (junto con el resto de textos visibles que expone la
+notificacion). Listener conserva esos campos y los interpreta en el servidor:
+los avisos de la app Yape pueden incluir `cód. de seguridad es: 123`, mientras
+los pagos originados desde BCP o Plin pueden mostrar nombre e importe sin
+codigo. Un aviso sin codigo queda para revision; nunca se aprueba una recarga
+solo por nombre e importe. El panel local muestra el texto recibido en
+**Ver datos**, sin escribirlo completo en Logcat.
+Los registros anteriores conservan su resultado de extracción; no se
+reinterpretan automáticamente para evitar reutilizar una evidencia de pago.
+
 ## Configuracion del servidor
 
 Para desarrollo local, `Listener.Api` carga automáticamente
@@ -46,6 +57,33 @@ Los endpoints devuelven `503 SEGURIDAD_NO_CONFIGURADA` mientras falte la clave
 correspondiente. Produccion requiere HTTPS con certificado valido.
 
 ## Instalar el capturador Android
+
+### Probar la conexion sin hacer un yapeo
+
+La app Android tiene el boton **Probar conexion con Listener**. Consulta el
+endpoint `GET /api/v1/yape/connection` usando la clave guardada del colector.
+Un `HTTP 200` con `conectado: true` confirma que el telefono alcanza Listener y
+que la clave coincide. `401 API_KEY_INVALIDA` significa que la clave no coincide;
+`503 SEGURIDAD_NO_CONFIGURADA` significa que falta configurarla en Listener.
+La prueba no crea una notificacion ni una recarga.
+
+Con el telefono por USB y `adb reverse tcp:5057 tcp:5057`, la URL base de la
+app debe ser `http://127.0.0.1:5057`. Despues de cambiar el codigo del servidor
+hay que reiniciarlo; despues de cambiar la app Android hay que instalar la nueva
+compilacion. El panel del navegador no es el endpoint de conexion.
+
+Endpoints de esta integracion:
+
+| Metodo | Ruta | Cliente | Funcion |
+| --- | --- | --- | --- |
+| GET | `/api/v1/yape/connection` | Colector Android | Diagnostico de red y clave |
+| POST | `/api/v1/yape/notifications` | Colector Android | Entregar aviso de Yape |
+| POST | `/api/v1/yape/verifications` | Servidor TonysGo | Crear solicitud de recarga |
+| GET | `/api/v1/yape/verifications/{reference}` | Servidor TonysGo | Consultar resultado |
+
+Las rutas de Android requieren `ListenerSecurity:CollectorApiKey`; las de
+TonysGo requieren `ListenerSecurity:TonysGoApiKey`. Ambas usan el encabezado
+`X-Listener-Api-Key` y devuelven JSON.
 
 Abre `Listener.sln` en Visual Studio, selecciona
 `TonysGo.YapeListener.Android` como proyecto de inicio, conecta el Android
