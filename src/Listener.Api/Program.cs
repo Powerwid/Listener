@@ -8,6 +8,7 @@ using Listener.Api.Automatic;
 using Listener.Api.Security;
 using Listener.Api.Yape;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 LocalEnvironment.Load();
 
@@ -68,7 +69,20 @@ builder.Services.AddHttpClient("TonysGoCallback", client => client.Timeout = Tim
 builder.Services.AddHostedService<AutomaticReaderWorker>();
 builder.Services.AddHostedService<TonysGoCallbackWorker>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document, _, _) =>
+{
+    // Lets Swagger UI send X-Listener-Api-Key through its "Authorize" button.
+    document.Components ??= new OpenApiComponents();
+    document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+    document.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Name = ApiKeyValidator.HeaderName
+    };
+    document.Security = [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("ApiKey", document)] = [] }];
+    return Task.CompletedTask;
+}));
 
 var app = builder.Build();
 
@@ -100,9 +114,15 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Outside Development the API docs stay off unless OpenApi:Habilitado is set.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi:Habilitado"))
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Listener API v1"));
+}
+
+if (app.Environment.IsDevelopment())
+{
     app.MapRazorPages();
     app.MapGet("/", () => Results.Redirect("/panel")).ExcludeFromDescription();
     app.MapGet("/api/lector", (AutomaticState state) => state.Status);

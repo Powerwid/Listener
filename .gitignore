@@ -10,3 +10,6 @@ artifacts/
 **/secrets.json
 *.user
 *.suo
+
+# Configuracion del servidor con secretos
+src/Listener.Api/web.config

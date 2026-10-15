@@ -33,12 +33,16 @@ internal static class ListenerConfig
     private const string ApiKeyKey = "api_key";
     private const string LastStatusKey = "last_status";
 
+    // Published Listener used until the device saves its own values.
+    private const string DefaultEndpoint = "https://tonysgo-001-site4.ftempurl.com";
+    private const string DefaultDeviceId = "yape-caja-01";
+
     public static ListenerSettings Load(Context context)
     {
         var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private);
         return new ListenerSettings(
-            preferences?.GetString(EndpointKey, string.Empty) ?? string.Empty,
-            preferences?.GetString(DeviceKey, string.Empty) ?? string.Empty,
+            preferences?.GetString(EndpointKey, DefaultEndpoint) ?? DefaultEndpoint,
+            preferences?.GetString(DeviceKey, DefaultDeviceId) ?? DefaultDeviceId,
             preferences?.GetString(ApiKeyKey, string.Empty) ?? string.Empty);
     }
 
