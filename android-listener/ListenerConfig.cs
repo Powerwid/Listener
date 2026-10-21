@@ -8,68 +8,83 @@ internal sealed record ListenerSettings(string Endpoint, string DeviceId, string
     {
         get
         {
-            if (!Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri))
-            {
-                return false;
-            }
-
-            var allowedEndpoint = uri.Scheme == Uri.UriSchemeHttps;
+            if (!Uri.TryCreate(Endpoint, UriKind.Absolute, out var uri)) return false;
+            var allowed = uri.Scheme == Uri.UriSchemeHttps;
 #if DEBUG
-            allowedEndpoint |= uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback;
+            allowed |= uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback;
 #endif
-
-            return allowedEndpoint &&
-                   !string.IsNullOrWhiteSpace(DeviceId) &&
-                   ApiKey.Length >= 32;
+            return allowed && !string.IsNullOrWhiteSpace(DeviceId) && ApiKey is { Length: 80 }
+                && ApiKey.StartsWith("dvc_", StringComparison.Ordinal);
         }
     }
 }
 
 internal static class ListenerConfig
 {
+    private static readonly object Gate = new();
     private const string PreferencesName = "listener_config";
-    private const string EndpointKey = "endpoint";
-    private const string DeviceKey = "device";
-    private const string ApiKeyKey = "api_key";
-    private const string LastStatusKey = "last_status";
-
-    // Published Listener used until the device saves its own values.
     private const string DefaultEndpoint = "https://tonysgo-001-site4.ftempurl.com";
-    private const string DefaultDeviceId = "yape-caja-01";
+
+    public static string InstallationId(Context context)
+    {
+        lock (Gate)
+        {
+            var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)!;
+            var value = preferences.GetString("installation_id", null);
+            if (!string.IsNullOrEmpty(value)) return value;
+            value = Guid.NewGuid().ToString("N");
+            if (!preferences.Edit()!.PutString("installation_id", value)!.Commit()) throw new IOException("No se pudo identificar esta instalacion.");
+            return value;
+        }
+    }
 
     public static ListenerSettings Load(Context context)
     {
-        var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private);
-        return new ListenerSettings(
-            preferences?.GetString(EndpointKey, DefaultEndpoint) ?? DefaultEndpoint,
-            preferences?.GetString(DeviceKey, DefaultDeviceId) ?? DefaultDeviceId,
-            preferences?.GetString(ApiKeyKey, string.Empty) ?? string.Empty);
+        lock (Gate)
+        {
+            var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)!;
+            var deviceId = preferences.GetString("device", null);
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                deviceId = InstallationId(context);
+                if (!preferences.Edit()!.PutString("device", deviceId)!.Commit()) throw new IOException("No se pudo guardar el identificador interno.");
+            }
+            // Existing notification identities stay stable so an upgrade cannot duplicate a queued payment.
+            return new(preferences.GetString("endpoint", DefaultEndpoint) ?? DefaultEndpoint,
+                deviceId, DeviceCredentialVault.Read(context));
+        }
     }
 
-    public static void Save(Context context, ListenerSettings settings)
+    public static void SavePairing(Context context, string endpoint, string credential)
     {
-        var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
-            ?? throw new InvalidOperationException("No se pudo abrir la configuracion local.");
-
-        using var editor = preferences.Edit();
-        editor?.PutString(EndpointKey, settings.Endpoint.Trim().TrimEnd('/'));
-        editor?.PutString(DeviceKey, settings.DeviceId.Trim());
-        editor?.PutString(ApiKeyKey, settings.ApiKey.Trim());
-        editor?.Apply();
+        lock (Gate)
+        {
+            DeviceCredentialVault.Save(context, credential);
+            var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)!;
+            if (!preferences.Edit()!.PutString("endpoint", endpoint.TrimEnd('/'))!.Commit())
+            {
+                DeviceCredentialVault.Clear(context);
+                throw new IOException("No se pudo guardar el servidor de la vinculacion.");
+            }
+        }
+        SetLastStatus(context, "Telefono vinculado mediante QR. Los abonos pendientes se enviaran automaticamente.");
     }
 
-    public static string LastStatus(Context context)
+    public static bool ClearPairing(Context context, string rejectedCredential)
     {
-        var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private);
-        return preferences?.GetString(LastStatusKey, "Sin notificaciones capturadas todavía.")
-               ?? "Sin notificaciones capturadas todavía.";
+        lock (Gate)
+        {
+            // A delayed 401 from an old upload must not erase a freshly scanned connection.
+            if (DeviceCredentialVault.Read(context) != rejectedCredential) return false;
+            DeviceCredentialVault.Clear(context);
+        }
+        SetLastStatus(context, "La vinculacion ya no esta activa. Escanea un nuevo QR desde Conexion.");
+        return true;
     }
 
-    public static void SetLastStatus(Context context, string status)
-    {
-        var preferences = context.GetSharedPreferences(PreferencesName, FileCreationMode.Private);
-        using var editor = preferences?.Edit();
-        editor?.PutString(LastStatusKey, status.Length <= 500 ? status : status[..500]);
-        editor?.Apply();
-    }
+    public static string LastStatus(Context context) => context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+        ?.GetString("last_status", "Sin notificaciones capturadas todavia.") ?? "Sin notificaciones capturadas todavia.";
+
+    public static void SetLastStatus(Context context, string status) => context.GetSharedPreferences(PreferencesName, FileCreationMode.Private)
+        ?.Edit()?.PutString("last_status", status)?.Apply();
 }

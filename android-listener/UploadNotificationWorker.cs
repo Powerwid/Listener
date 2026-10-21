@@ -1,10 +1,8 @@
 using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using System.Net.Http.Json;
 using Android.Content;
-using Android.Util;
 using AndroidX.Work;
+using TonysGo.Listener.Bbva;
 using WorkResult = AndroidX.Work.ListenableWorker.Result;
 
 namespace TonysGo.YapeListener.Android;
@@ -12,93 +10,81 @@ namespace TonysGo.YapeListener.Android;
 public sealed class UploadNotificationWorker : Worker
 {
     public const string EventIdKey = "eventId";
-    public const string PostedAtKey = "postedAt";
-    public const string TitleKey = "title";
-    public const string TextKey = "text";
-    public const string BigTextKey = "bigText";
+    public const string PackageKey = "packageName";
+    private static readonly HttpClient Client = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(15) };
 
-    private static readonly HttpClient HttpClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(15)
-    };
-
-    public UploadNotificationWorker(Context context, WorkerParameters workerParameters)
-        : base(context, workerParameters)
-    {
-    }
+    public UploadNotificationWorker(Context context, WorkerParameters parameters) : base(context, parameters) { }
 
     public override WorkResult DoWork()
     {
-        try
+        var context = ApplicationContext!;
+        var eventId = InputData!.GetString(EventIdKey) ?? "";
+        // Old Yape jobs must never be relabelled as BBVA after an app update.
+        if (InputData.GetString(PackageKey) != BbvaNotificationParser.OfficialPackage) return WorkResult.InvokeFailure()!;
+        try { return UploadAsync(eventId).GetAwaiter().GetResult(); }
+        catch (Exception exception)
         {
-            return UploadAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            var message = $"Error de envio a las {DateTimeOffset.Now:HH:mm:ss}: {ex.GetType().Name}: {ex.Message}";
-            ListenerConfig.SetLastStatus(ApplicationContext!, message);
-            ListenerDebugLog.Error(ApplicationContext!, message);
-            Log.Error("TonysGoYapeListener", ex.ToString());
+            BbvaHistory.Store(context).SetStatus(eventId, BbvaDeliveryStatus.Retry,
+                $"Sin confirmacion del servidor: {exception.GetType().Name}. Se reintentara.");
+            ListenerDebugLog.Error(context, $"Error enviando BBVA {Short(eventId)}: {exception.GetType().Name}.");
             return WorkResult.InvokeRetry()!;
         }
     }
 
-    private async Task<WorkResult> UploadAsync()
+    private async Task<WorkResult> UploadAsync(string eventId)
     {
-        var settings = ListenerConfig.Load(ApplicationContext!);
+        var context = ApplicationContext!;
+        var history = BbvaHistory.Store(context);
+        if (history.Read().Any(x => x.Notification.NotificationKey == eventId && x.Status == BbvaDeliveryStatus.StoredByListener))
+        {
+            BbvaHistory.Uploads(context).Remove(eventId);
+            return WorkResult.InvokeSuccess()!;
+        }
+        var settings = ListenerConfig.Load(context);
         if (!settings.IsValid)
         {
-            ListenerConfig.SetLastStatus(ApplicationContext!, "No se envio: configuracion local invalida.");
-            ListenerDebugLog.Warning(ApplicationContext!, "WorkManager cancelo el envio: configuracion local invalida.");
+            history.SetStatus(eventId, BbvaDeliveryStatus.ConfigurationRequired, "Escanea el QR generado en la web de Listener para vincular este telefono.");
             return WorkResult.InvokeFailure()!;
         }
 
-        var eventId = InputData!.GetString(EventIdKey) ?? "sin-id";
-        ListenerDebugLog.Info(ApplicationContext!,
-            $"Intentando enviar evento={Short(eventId)} al host={new Uri(settings.Endpoint).Host}.");
-        ListenerConfig.SetLastStatus(ApplicationContext!,
-            $"Enviando notificacion a las {DateTimeOffset.Now:HH:mm:ss}...");
-
-        var inputData = InputData;
-        var payload = JsonSerializer.Serialize(new
-        {
-            notificationKey = inputData.GetString(EventIdKey),
-            deviceId = settings.DeviceId,
-            packageName = YapeNotificationListenerService.YapePackage,
-            postedAt = DateTimeOffset.FromUnixTimeMilliseconds(inputData.GetLong(PostedAtKey, 0)),
-            title = inputData.GetString(TitleKey),
-            text = inputData.GetString(TextKey),
-            bigText = inputData.GetString(BigTextKey)
-        });
-
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{settings.Endpoint}/api/v1/yape/notifications");
+        var queued = BbvaHistory.Uploads(context).BindDevice(eventId, settings.DeviceId);
+        var input = queued.Notification with { DeviceId = queued.UploadDeviceId! };
+        history.SetStatus(eventId, BbvaDeliveryStatus.Sending, "Enviando al servidor Listener...");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{settings.Endpoint}/api/v1/bbva/notifications");
         request.Headers.Add("X-Listener-Api-Key", settings.ApiKey);
-        request.Content = new StringContent(payload, Encoding.UTF8);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
+        request.Content = JsonContent.Create(input, BbvaDeviceJsonContext.Default.BbvaNotificationRequest);
+        using var response = await Client.SendAsync(request).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
-            CharSet = "utf-8"
-        };
-
-        using var response = await HttpClient.SendAsync(request).ConfigureAwait(false);
+            var cleared = ListenerConfig.ClearPairing(context, settings.ApiKey);
+            history.SetStatus(eventId, cleared ? BbvaDeliveryStatus.ConfigurationRequired : BbvaDeliveryStatus.Retry,
+                cleared ? "El acceso ya no esta activo. Escanea un nuevo QR desde Conexion."
+                    : "La vinculacion se actualizo durante el envio. Se reintentara con la conexion nueva.");
+            return cleared ? WorkResult.InvokeFailure()! : WorkResult.InvokeRetry()!;
+        }
         if (response.IsSuccessStatusCode)
         {
-            ListenerDebugLog.Info(ApplicationContext!,
-                $"Servidor acepto evento={Short(eventId)} con HTTP {(int)response.StatusCode}.");
-            ListenerConfig.SetLastStatus(ApplicationContext!,
-                $"Notificacion enviada correctamente a las {DateTimeOffset.Now:HH:mm:ss} (HTTP {(int)response.StatusCode}).");
+            var receipt = await response.Content.ReadFromJsonAsync(BbvaDeviceJsonContext.Default.BbvaIngestResult).ConfigureAwait(false);
+            if (receipt is null || receipt.Id == Guid.Empty || !receipt.EsAbono)
+            {
+                history.SetStatus(eventId, BbvaDeliveryStatus.Rejected,
+                    $"Listener no reconocio el abono: {receipt?.CodigoMotivo ?? "respuesta invalida"}.");
+                return WorkResult.InvokeFailure()!;
+            }
+            history.SetStatus(eventId, BbvaDeliveryStatus.StoredByListener,
+                $"Listener recibio el abono (HTTP {(int)response.StatusCode}). La recarga se valida en Tony's Go.");
+            BbvaHistory.Uploads(context).Remove(eventId);
+            ListenerConfig.SetLastStatus(context, $"Abono BBVA recibido por Listener a las {DateTimeOffset.Now:HH:mm:ss}.");
             return WorkResult.InvokeSuccess()!;
         }
 
-        ListenerDebugLog.Warning(ApplicationContext!,
-            $"Servidor rechazo evento={Short(eventId)} con HTTP {(int)response.StatusCode}.");
-        ListenerConfig.SetLastStatus(ApplicationContext!,
-            $"Servidor respondio HTTP {(int)response.StatusCode} a las {DateTimeOffset.Now:HH:mm:ss}.");
-        return response.StatusCode is >= HttpStatusCode.BadRequest and < HttpStatusCode.InternalServerError
-            ? WorkResult.InvokeFailure()!
-            : WorkResult.InvokeRetry()!;
+        var retry = response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+            || (int)response.StatusCode >= 500;
+        history.SetStatus(eventId, retry ? BbvaDeliveryStatus.Retry : BbvaDeliveryStatus.Rejected,
+            $"Listener respondio HTTP {(int)response.StatusCode}. " + (retry ? "Se reintentara automaticamente." : "Comprueba la vinculacion y pulsa Reintentar envios."));
+        ListenerDebugLog.Warning(context, $"Envio BBVA {Short(eventId)}: HTTP {(int)response.StatusCode}.");
+        return retry ? WorkResult.InvokeRetry()! : WorkResult.InvokeFailure()!;
     }
 
-    private static string Short(string value) => value.Length <= 12 ? value : value[..12];
+    private static string Short(string value) => value[..Math.Min(value.Length, 12)];
 }

@@ -1,5 +1,8 @@
 # Panel local de Listener
 
+> Pantalla retirada: `/panel` ya no está disponible. Usa `/historial` y `/dispositivos`.
+> Consulta la [guía actual](vinculacion-qr.md). Las instrucciones siguientes son históricas.
+
 Actualizacion: el flujo principal ahora es **Activar lector**. Consulta
 [lector-automatico.md](lector-automatico.md) para recepcion automatica, persistencia
 y API JSON. Las consultas y cargas manuales descritas abajo son diagnosticos.

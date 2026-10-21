@@ -1,0 +1,21 @@
+@page "/dispositivos"
+@model Listener.Api.Pages.DispositivosModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Teléfonos · Listener</title><link rel="stylesheet" href="/devices/devices.css" /></head>
+<body><main class="dashboard"><header><div><p class="eyebrow">TONY'S GO · LISTENER</p><h1>Teléfonos vinculados</h1></div>
+<form method="post" asp-page-handler="Salir"><button class="secondary" type="submit">Cerrar sesión</button></form></header>
+<nav class="admin-nav" aria-label="Administración"><a href="/historial">Historial de avisos</a><a href="/dispositivos" aria-current="page">Teléfonos y QR</a></nav>
+<p class="intro">Vincula el teléfono que recibe los avisos de BBVA Empresas. La aplicación guardará la conexión automáticamente.</p>
+@Html.AntiForgeryToken()
+<div class="columns"><section class="card"><p class="eyebrow">NUEVA CONEXIÓN</p><h2>Vincular un teléfono</h2>
+<ol><li>Abre Listener en tu teléfono.</li><li>Entra en Conexión y pulsa Escanear QR.</li><li>Escanea el código y confirma el servidor.</li></ol>
+<button id="create-qr" type="button">Generar QR de vinculación</button>
+<div id="qr-area" hidden><img id="pairing-qr" alt="QR temporal para vincular el teléfono con Listener" />
+<p id="qr-expiry" role="status"></p><p class="muted">Se utiliza una sola vez. Generar otro invalida el anterior.</p></div>
+<p id="pairing-status" class="notice" role="status" hidden></p></section>
+<section class="card"><p class="eyebrow">EQUIPOS AUTORIZADOS</p><h2>Conexiones</h2>
+<p class="muted">Al revocar el acceso, el teléfono tendrá que escanear un nuevo QR para volver a enviar avisos.</p>
+<div id="devices" aria-live="polite"><p>Cargando teléfonos…</p></div></section></div>
+</main><script src="/devices/devices.js" defer></script></body></html>

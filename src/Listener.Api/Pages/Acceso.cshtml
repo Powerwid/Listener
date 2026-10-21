@@ -1,0 +1,20 @@
+@page "/acceso"
+@model Listener.Api.Pages.AccesoModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Acceso · Listener</title><link rel="stylesheet" href="/devices/devices.css" /></head>
+<body><main class="login"><p class="eyebrow">TONY'S GO · LISTENER</p><h1>Administra tus avisos</h1>
+<p class="intro">Consulta el historial, revisa la entrega de los abonos y vincula los teléfonos que reciben avisos de BBVA Empresas.</p>
+@if (Model.Error is not null) { <p class="notice error" role="alert">@Model.Error</p> }
+@if (!Model.Configured)
+{
+    <p class="notice">El administrador debe configurar el acceso en el servidor con el comando <code>--configure-admin</code>.</p>
+}
+else
+{
+    <form method="post"><label asp-for="Username">Usuario</label><input asp-for="Username" autocomplete="username" maxlength="100" required />
+    <label asp-for="Password">Contraseña</label><input asp-for="Password" type="password" autocomplete="current-password" maxlength="256" required />
+    <button type="submit">Entrar</button></form>
+}
+</main></body></html>

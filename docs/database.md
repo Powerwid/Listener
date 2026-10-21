@@ -41,7 +41,8 @@ Para ejecutar la API y cargar User Secrets:
 dotnet run --project src/Listener.Api -- --environment Development
 ```
 
-La prueba `--test-gmail` sigue siendo independiente y no necesita SQL Server.
+El lector de Gmail fue retirado. Los registros de correo existentes se conservan
+para consulta desde el historial web.
 
 ## Migraciones
 

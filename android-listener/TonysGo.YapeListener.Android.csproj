@@ -6,13 +6,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationId>com.tonysgo.yapelistener</ApplicationId>
-    <ApplicationTitle>Tony's Go Yape Listener</ApplicationTitle>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationTitle>Tony's Go BBVA Listener</ApplicationTitle>
+    <ApplicationVersion>3</ApplicationVersion>
+    <ApplicationDisplayVersion>1.2</ApplicationDisplayVersion>
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Xamarin.AndroidX.Work.Runtime" Version="2.11.2.1" />
+    <PackageReference Include="Xamarin.GooglePlayServices.Code.Scanner" Version="116.1.0.16" />
+    <Compile Include="../shared/BbvaNotifications.cs" Link="Bbva/BbvaNotifications.cs" />
+    <Compile Include="../shared/BbvaHistoryStore.cs" Link="Bbva/BbvaHistoryStore.cs" />
+    <Compile Include="../shared/DevicePairingContracts.cs" Link="Pairing/DevicePairingContracts.cs" />
   </ItemGroup>
 </Project>

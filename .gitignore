@@ -13,3 +13,4 @@ artifacts/
 
 # Configuracion del servidor con secretos
 src/Listener.Api/web.config
+**/App_Data/

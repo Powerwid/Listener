@@ -1,5 +1,9 @@
 # Prueba local de Gmail
 
+> Función retirada: el proyecto ya no conecta con Gmail ni admite esta prueba.
+> Consulta el [flujo actual de BBVA y el historial web](vinculacion-qr.md).
+> Las instrucciones siguientes se conservan solo como referencia histórica.
+
 Esta prueba manual no es el lector permanente ni valida pagos. No expone una ruta
 HTTP. Abre Inbox en modo de solo lectura y muestra exclusivamente el numero de
 mensajes, sin descargar cuerpos, enviar, borrar ni cambiar marcas de lectura.

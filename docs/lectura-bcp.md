@@ -1,7 +1,10 @@
 # Lectura de correos BCP
 
-El lector extrae datos reales de un EML o de Gmail mediante MailKit/MimeKit.
-Es una lectura manual de una sola ejecucion: todavia no es un worker permanente,
+> La conexión a Gmail y `--read-gmail-bcp` fueron retirados. Solo permanece el
+> análisis local de EML para compatibilidad y diagnóstico de formatos anteriores.
+
+El analizador extrae datos de un EML mediante MimeKit.
+Es una lectura manual de una sola ejecucion,
 no escribe en SQL Server ni responde a TonysGo. `pagoVerificado` siempre es false.
 La simulacion existente sigue usando sus propios archivos y tablas de prueba.
 

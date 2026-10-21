@@ -1,43 +1,45 @@
-# Tony's Go Yape Listener para Android
+# Tony's Go BBVA Listener para Android
 
-Aplicacion Android nativa escrita en C# y .NET. Se instala en el mismo telefono
-que recibe los pagos de Yape, escucha exclusivamente las notificaciones del
-paquete oficial `com.bcp.innovacxion.yapeapp` y las envia al microservicio
-Listener con WorkManager y reintentos persistentes.
+Aplicación nativa C#/.NET 10 que captura únicamente avisos de BBVA Empresas.
+Extrae nombre completo e importe de «Cobro con QR» y los envía a Listener.Api.
+La comparación y acreditación de recargas corresponden a AppTaxi.
+
+## Conectar mediante QR
+
+1. Prepara el administrador y aplica las migraciones de vinculación en Listener.Api.
+2. Abre `/dispositivos` en la web de Listener e inicia sesión.
+3. Pulsa **Generar QR de vinculación**.
+4. En Android abre **Conexión → Escanear QR de vinculación** y confirma el servidor.
+5. Habilita acceso a notificaciones y pulsa **Probar conexión con Listener**.
+
+No hay formularios de nombre/identificador ni clave. El identificador se genera
+internamente y la credencial queda cifrada con Android Keystore. El QR vence en
+cinco minutos y solo funciona una vez. La web permite revocar equipos vinculados.
+El lector requiere Servicios de Google Play y puede descargar su módulo la primera vez.
+
+## Historial en el teléfono
+
+**Historial BBVA** conserva los últimos 200 avisos con nombre, importe, fecha y
+estado de envío. Toca una fila para ver el mensaje original. Los pendientes se
+conservan en una cola independiente, incluso sin conexión. **Recibido en Listener**
+confirma recepción en el servidor, no acreditación de saldo.
 
 ## Ejecutar desde Visual Studio
 
-1. Abre `Listener.sln` o `TonysGo.YapeListener.Android.csproj`.
-2. Selecciona `TonysGo.YapeListener.Android` como proyecto de inicio.
-3. Activa depuracion USB en el telefono y conectalo con un cable de datos.
-4. Acepta la huella RSA en el telefono.
-5. Selecciona el telefono Android en la barra de Visual Studio y pulsa `F5`.
-6. Configura la URL HTTPS de Listener, el identificador del equipo y la misma
-   clave definida en `ListenerSecurity:CollectorApiKey`.
-7. Pulsa **Abrir acceso a notificaciones** y habilita el listener.
+Abre `Listener.sln`, selecciona `TonysGo.YapeListener.Android` como inicio y conecta
+el teléfono con depuración USB. Selecciona Debug y pulsa F5. Se mantiene el
+ApplicationId anterior para actualizar la instalación y conservar el historial.
+Se requiere Android 8.0/API 26 o posterior y el workload Android de .NET 10.
 
-El proyecto requiere Android 8.0 (API 26) o posterior y .NET 10 con la carga de
-trabajo Android. No requiere Android Studio ni Flutter.
-
-Consulta `../docs/yape-notificaciones-android.md` para el flujo completo.
-
-## Prueba local por USB
-
-La compilacion Debug permite exclusivamente HTTP local para usar el puente de
-ADB. Con el telefono conectado ejecuta:
+Para pruebas locales por USB inicia la API con el perfil `http` y ejecuta:
 
 ```powershell
 adb reverse tcp:5057 tcp:5057
 ```
 
-Inicia `Listener.Api` con el perfil `http` y escribe estos datos en la app:
+Genera el QR desde `http://localhost:5057/dispositivos`; el APK Debug acepta
+loopback HTTP mediante ese puente. Release exige un servidor HTTPS.
 
-- URL: `http://127.0.0.1:5057`
-- Dispositivo: `yape-caja-01`
-- Clave: el valor local de `ListenerSecurity:CollectorApiKey`
+[Preparación del servidor y vinculación QR](../docs/vinculacion-qr.md)
 
-`127.0.0.1` funciona en este caso porque ADB reenvia el puerto del telefono al
-puerto 5057 de la computadora. La compilacion Release sigue exigiendo HTTPS.
-
-El proyecto se abre directamente en Android Studio. No incluye claves ni URL de
-produccion dentro del APK; se configuran en la pantalla local del equipo dedicado.
+[Contrato de entrega de abonos a AppTaxi](../docs/bbva-notificaciones-android.md)

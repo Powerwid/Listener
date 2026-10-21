@@ -141,12 +141,4 @@ public class BcpEmailParserTests
         await Assert.ThrowsAsync<FormatException>(() => BcpEmailCommand.InspectAsync(stream, CancellationToken.None));
     }
 
-    [Fact]
-    public async Task CancelledReadStopsBeforeNetwork()
-    {
-        using var timeout = new CancellationTokenSource();
-        timeout.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            GmailBcpReader.ReadOnceAsync("sample@gmail.com", "abcdefghijklmnop", timeout.Token));
-    }
 }

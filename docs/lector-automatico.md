@@ -1,5 +1,9 @@
 # Recepcion automatica de notificaciones
 
+> Función retirada: ya no se ejecuta el lector de correo ni existen sus rutas web.
+> El flujo actual usa BBVA Empresas desde Android y el [historial web](vinculacion-qr.md#historial-web).
+> Las instrucciones siguientes se conservan solo como referencia histórica.
+
 El servidor ASP.NET Core ejecuta `AutomaticReaderWorker` en segundo plano.
 No se registran correos a mano. Gmail recibe el aviso del banco y Listener consulta
 INBOX cada 30 segundos, filtra BCP, extrae los datos, los guarda y expone su JSON.

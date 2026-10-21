@@ -1,5 +1,8 @@
 # Listener de notificaciones Yape
 
+> Flujo anterior. La aplicación Android actual captura BBVA Empresas; consulta
+> [el flujo BBVA](bbva-notificaciones-android.md). Las rutas Yape permanecen por compatibilidad.
+
 ## Flujo implementado
 
 1. La app C#/.NET `android-listener` se instala en el mismo Android donde esta Yape.
