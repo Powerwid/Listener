@@ -17,38 +17,39 @@
     </header>
     <nav class="admin-nav" aria-label="Administración">
         <a href="/historial" aria-current="page">Historial de avisos</a>
+        <a href="/reportes">Reportes</a>
         <a href="/dispositivos">Teléfonos y QR</a>
     </nav>
     <section class="history-intro"><div><p class="eyebrow">CENTRO DE CONTROL</p><h1>Historial de notificaciones</h1>
-        <p class="intro">Consulta los avisos recibidos, el nombre y monto extraídos y el estado de entrega a Tony’s Go.</p></div>
+        <p class="intro">Consulta los pagos recibidos, el acumulado del mismo nombre y la respuesta de validación enviada a Tony’s Go.</p></div>
         <a class="button-link" href="/dispositivos">Vincular teléfono</a>
     </section>
     <div class="history-metrics" aria-label="Resumen de los resultados filtrados">
         <div class="card metric"><span>Avisos recibidos</span><strong id="metric-total">—</strong><small>En el historial filtrado</small></div>
         <div class="card metric"><span>Abonos BBVA</span><strong id="metric-payments">—</strong><small>Nombre y monto extraídos</small></div>
-        <div class="card metric"><span>Pendientes de entrega</span><strong id="metric-pending">—</strong><small>Abonos por enviar a Tony’s Go</small></div>
-        <div class="card metric"><span>Entregados</span><strong id="metric-sent">—</strong><small>Recibidos por Tony’s Go</small></div>
+        <div class="card metric"><span>Respuestas insuficientes</span><strong id="metric-insufficient">—</strong><small>Total menor de S/10 al validar</small></div>
+        <div class="card metric"><span>Pendientes de entrega</span><strong id="metric-pending">—</strong><small>Respuestas por enviar a Tony’s Go</small></div>
+        <div class="card metric"><span>Entregados</span><strong id="metric-sent">—</strong><small>Respuestas recibidas por Tony’s Go</small></div>
         <div class="card metric"><span>Descartados</span><strong id="metric-discarded">—</strong><small>Avisos sin abono reconocido</small></div>
     </div>
     <section class="card history-card" aria-labelledby="records-title">
-        <div class="history-heading"><div><h2 id="records-title">Avisos y abonos</h2><p class="muted">El historial del servidor conserva los registros anteriores de BBVA, Yape y correo. Fechas en hora de Perú.</p></div>
+        <div class="history-heading"><div><h2 id="records-title">Avisos de BBVA Empresas</h2><p class="muted">Pagos y notificaciones recibidos. Fechas en hora de Perú.</p></div>
             <button id="refresh-history" class="secondary" type="button">Actualizar</button>
         </div>
         <form id="history-filters" class="history-filters" method="get">
-            <div class="search-field"><label for="search">Buscar</label><input id="search" name="search" type="search" maxlength="150" placeholder="Nombre, mensaje o dispositivo…" /></div>
-            <div><label for="source">Origen</label><select id="source" name="source"><option value="">Todos los orígenes</option><option value="bbva">BBVA Empresas</option><option value="yape">Yape</option><option value="correo">Correo BCP</option></select></div>
-            <div><label for="status">Estado</label><select id="status" name="status"><option value="">Todos los estados</option><option value="pending">Pendientes de entrega</option><option value="sent">Entregados a Tony’s Go</option><option value="failed">Envío con error</option><option value="discarded">Descartados</option><option value="error">Error de lectura</option></select></div>
+            <div class="search-field"><label for="search">Buscar</label><input id="search" name="search" type="search" maxlength="150" placeholder="Nombre o mensaje…" /></div>
+            <div><label for="status">Estado</label><select id="status" name="status"><option value="">Todos los estados</option><option value="correct">Validación correcta</option><option value="insufficient">Validación insuficiente</option><option value="pending">Pendientes de entrega</option><option value="sent">Entregados a Tony’s Go</option><option value="failed">Envío con error</option><option value="discarded">Descartados</option><option value="error">Error de lectura</option></select></div>
             <div><label for="from">Desde</label><input id="from" name="from" type="date" /></div>
             <div><label for="to">Hasta</label><input id="to" name="to" type="date" /></div>
             <button type="submit">Filtrar</button><button id="clear-filters" class="secondary" type="button">Limpiar</button>
         </form>
         <div class="history-toolbar"><label class="auto-refresh"><input id="auto-refresh" type="checkbox" checked /> Actualización automática</label><span id="history-updated" class="muted" role="status">Cargando historial…</span></div>
         <p id="history-feedback" class="notice" role="status" hidden></p>
-        <div class="history-table-wrap"><table id="history-table"><thead><tr><th>Fecha del aviso</th><th>Origen / teléfono</th><th>Nombre / notificación</th><th>Monto</th><th>Estado</th><th><span class="sr-only">Detalle</span></th></tr></thead><tbody id="history-rows"></tbody></table></div>
+        <div class="history-table-wrap"><table id="history-table"><thead><tr><th>Fecha del aviso</th><th>Nombre / notificación</th><th>Monto</th><th>Estado</th><th><span class="sr-only">Detalle</span></th></tr></thead><tbody id="history-rows"></tbody></table></div>
         <div id="history-empty" class="history-empty" hidden><h3>No hay avisos para mostrar</h3><p>Revisa los filtros o vincula un teléfono para recibir las notificaciones de BBVA Empresas.</p><a href="/dispositivos">Ir a teléfonos y QR →</a></div>
         <div class="history-pagination"><span id="history-count" class="muted"></span><div><button id="previous-page" class="secondary" type="button" disabled>Anterior</button><span id="history-page">Página 1</span><button id="next-page" class="secondary" type="button" disabled>Siguiente</button></div></div>
     </section>
-    <p class="history-footnote">La entrega confirma que Tony’s Go recibió el abono. La comparación con el usuario y la acreditación de la recarga se realizan en Tony’s Go.</p>
+    <p class="history-footnote">Los pagos del mismo nombre se acumulan sin límite de tiempo. Al alcanzar S/10 se valida el total; los siguientes pagos empiezan una nueva acumulación. Listener envía la respuesta a Tony’s Go, donde se guarda y se gestiona la recarga.</p>
     <noscript><p class="notice">Activa JavaScript para consultar y administrar el historial.</p></noscript>
 </main>
 <dialog id="notification-detail" aria-labelledby="detail-title"><div class="detail-header"><div><p class="eyebrow">DETALLE DEL AVISO</p><h2 id="detail-title">Notificación</h2></div><button id="close-detail" class="secondary" type="button" aria-label="Cerrar detalle">Cerrar</button></div><div id="detail-content"></div></dialog>

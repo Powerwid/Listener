@@ -23,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Listener.Api\Listener.Api.csproj" />
     <Compile Include="../../shared/BbvaHistoryStore.cs" Link="Bbva/BbvaHistoryStore.cs" />
+    <Compile Include="../../shared/BbvaDeliveryRules.cs" Link="Bbva/BbvaDeliveryRules.cs" />
+    <Compile Include="../../shared/ListenerRecoveryPlan.cs" Link="Bbva/ListenerRecoveryPlan.cs" />
   </ItemGroup>
 
 </Project>

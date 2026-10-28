@@ -143,6 +143,7 @@ public sealed class BbvaPendingUploads(string directory)
 // Keep persistence and HTTP serialization working in trimmed Android Release builds.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(List<BbvaHistoryEntry>))]
+[JsonSerializable(typeof(BbvaHistoryEntry))]
 [JsonSerializable(typeof(BbvaQueuedUpload))]
 [JsonSerializable(typeof(BbvaNotificationRequest))]
 [JsonSerializable(typeof(BbvaIngestResult))]

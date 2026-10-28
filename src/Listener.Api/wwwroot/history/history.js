@@ -35,16 +35,18 @@ function parameters() {
 function render(item) {
   const row = element('tr');
   const received = element('td', date(item.receivedAt));
-  const source = element('td'); source.append(element('strong', item.source));
-  if (item.deviceId) source.append(element('small', item.deviceId));
   const name = element('td', null, 'notification-name'); name.append(element('strong', item.name || item.title || 'Sin nombre extraído'));
   name.append(element('small', item.name ? item.title : item.classification));
   const amount = element('td', money(item), 'notification-amount');
+  if (item.validation && !item.validation.correcto)
+    amount.append(element('small', `Faltan ${money({ amount: item.validation.montoFaltante, currency: 'PEN' })}`, 'minimum-warning'));
+  if (item.validation && item.validation.montoAcumulado !== item.amount)
+    amount.append(element('small', `Acumulado ${money({ amount: item.validation.montoAcumulado, currency: 'PEN' })}`));
   const state = element('td'); state.append(element('span', item.statusLabel, `status-badge status-${item.status}`));
   state.append(element('small', item.classification));
   const action = element('td'); const button = element('button', 'Ver detalle', 'row-detail'); button.type = 'button';
   button.addEventListener('click', () => openDetail(item.id)); action.append(button);
-  row.append(received, source, name, amount, state, action);
+  row.append(received, name, amount, state, action);
   return row;
 }
 async function refresh(targetPage = page, interactive = false) {
@@ -53,10 +55,11 @@ async function refresh(targetPage = page, interactive = false) {
   const params = parameters(); params.set('page', targetPage);
   if (interactive) { feedback.hidden = true; document.querySelector('#history-updated').textContent = 'Actualizando…'; }
   try {
-    const data = await api(`/api/v1/admin/history?${params}`, { signal: request.signal });
+    const apiParams = new URLSearchParams(params); apiParams.set('source', 'bbva');
+    const data = await api(`/api/v1/admin/history?${apiParams}`, { signal: request.signal });
     page = data.page; pages = data.pages;
     const summary = data.summary;
-    for (const [id, value] of Object.entries({ total: summary.total, payments: summary.bbvaPayments, pending: summary.pending, sent: summary.sent, discarded: summary.discarded })) document.querySelector(`#metric-${id}`).textContent = value.toLocaleString('es-PE');
+    for (const [id, value] of Object.entries({ total: summary.total, payments: summary.bbvaPayments, insufficient: summary.insufficient, pending: summary.pending, sent: summary.sent, discarded: summary.discarded })) document.querySelector(`#metric-${id}`).textContent = value.toLocaleString('es-PE');
     const nextRevision = JSON.stringify(data.items);
     if (nextRevision !== revision) { rows.replaceChildren(...data.items.map(render)); revision = nextRevision; }
     document.querySelector('#history-empty').hidden = data.items.length !== 0;
@@ -77,10 +80,16 @@ function showDetail(data) {
   detailContent.replaceChildren();
   detailContent.append(element('span', item.statusLabel, `status-badge status-${item.status}`));
   const grid = element('dl', null, 'detail-grid');
-  const fields = { Origen: item.source, Monto: money(item), 'Nombre extraído': item.name || 'Sin nombre', Clasificación: item.classification,
+  const fields = { Monto: money(item), 'Nombre extraído': item.name || 'Sin nombre', Clasificación: item.classification,
     'Fecha del aviso (Perú)': date(item.receivedAt), 'Registrado en Listener': date(item.storedAt), Teléfono: item.deviceId || 'No aplica',
     Motivo: item.reason || 'Sin motivo' };
   for (const [label, value] of Object.entries(fields)) { const field = element('div'); field.append(element('dt', label), element('dd', value)); grid.append(field); }
+  if (item.validation) {
+    const validation = element('section', null, `minimum-validation${item.validation.correcto ? ' minimum-valid' : ''}`);
+    validation.append(element('h3', item.validation.correcto ? 'Validación correcta' : 'Monto insuficiente para recarga'),
+      element('p', item.validation.mensaje));
+    detailContent.append(validation);
+  }
   detailContent.append(grid);
   for (const [title, content] of [['Título original', item.title], ['Mensaje original', data.text], ['Mensaje ampliado', data.expandedText]]) {
     if (!content) continue;
@@ -102,7 +111,7 @@ document.querySelector('#refresh-history').addEventListener('click', () => refre
 document.querySelector('#previous-page').addEventListener('click', () => refresh(page - 1, true));
 document.querySelector('#next-page').addEventListener('click', () => refresh(page + 1, true));
 const initial = new URLSearchParams(window.location.search);
-for (const name of ['search', 'source', 'status', 'from', 'to']) if (initial.has(name)) form.elements[name].value = initial.get(name);
+for (const name of ['search', 'status', 'from', 'to']) if (initial.has(name)) form.elements[name].value = initial.get(name);
 page = Math.max(1, Math.min(1000000, Number.parseInt(initial.get('page'), 10) || 1));
 refresh(page, true);
 setInterval(() => { if (!document.hidden && document.querySelector('#auto-refresh').checked) refresh(); }, 15000);

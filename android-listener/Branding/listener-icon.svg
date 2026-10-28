@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="18 18 72 72">
+  <title>Listener: chevron amarillo y letras LS blancas sobre morado</title>
+  <defs>
+    <linearGradient id="purple" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#54419f"/>
+      <stop offset=".5" stop-color="#43338c"/>
+      <stop offset="1" stop-color="#30246b"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="72" height="72" rx="18" fill="url(#purple)"/>
+  <g transform="translate(8.7 9.6) scale(.0714)">
+    <path fill="#ffcc00" d="M203,392L389,596Q409,618 391,641L205,855L205,741Q204,719 221,699L282,619L221,551Q203,532 203,508Z"/>
+    <path fill="#fff" d="M478,450L582,450L545,687Q541,718 567,718L720,718L699,794L511,794Q429,794 441,714Z"/>
+    <path fill="#fff" d="M1066,450L878,450C801,450 759,482 750,548L744,588C736,633 762,653 816,653L939,653C961,653 967,661 964,681L960,693C956,711 947,719 923,719L742,719L729,794L937,794C1014,794 1045,782 1053,683L1061,650C1078,584 1046,579 974,579L872,579C847,579 841,571 845,552L847,538C850,523 861,516 880,516L1054,516Z"/>
+  </g>
+</svg>

@@ -1,0 +1,51 @@
+@page "/reportes"
+@model Listener.Api.Pages.ReportesModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="es"><head>
+    <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reportes · Listener</title>
+    <link rel="stylesheet" href="/devices/devices.css" asp-append-version="true" />
+    <link rel="stylesheet" href="/history/history.css" asp-append-version="true" />
+    <link rel="stylesheet" href="/reports/reports.css" asp-append-version="true" />
+    <script src="/reports/reports.js" asp-append-version="true" defer></script>
+</head><body>
+<main class="dashboard history-dashboard">
+    <header><a class="wordmark" href="/historial">Tony’s Go <span>Listener</span></a>
+        <form method="post" asp-page-handler="Salir"><button class="secondary" type="submit">Cerrar sesión</button></form>
+    </header>
+    <nav class="admin-nav" aria-label="Administración">
+        <a href="/historial">Historial de avisos</a><a href="/reportes" aria-current="page">Reportes</a><a href="/dispositivos">Teléfonos y QR</a>
+    </nav>
+    <section class="history-intro report-intro"><div><p class="eyebrow">BBVA EMPRESAS</p><h1>Reportes</h1>
+        <p class="intro">Revisa los pagos por fecha y estado. Descarga los resultados en un archivo Excel.</p></div>
+        <button id="export-excel" class="export-button" type="button" disabled>Exportar Excel</button>
+    </section>
+    <section class="card history-card" aria-labelledby="report-filters-title">
+        <div class="history-heading"><div><h2 id="report-filters-title">Prepara tu reporte</h2><p class="muted">Las fechas corresponden al aviso recibido, en hora de Perú. Deja las fechas vacías para consultar todo el período.</p></div></div>
+        <form id="report-filters" class="history-filters report-filters" method="get">
+            <div><label for="from">Desde</label><input id="from" name="from" type="date" /></div>
+            <div><label for="to">Hasta</label><input id="to" name="to" type="date" /></div>
+            <div class="report-status"><label for="status">Estado</label><select id="status" name="status">
+                <option value="">Todos los estados</option><option value="correct">Validación correcta</option><option value="insufficient">Validación insuficiente</option>
+                <option value="pending">Pendientes de entrega</option><option value="sent">Entregados a Tony’s Go</option><option value="failed">Envío con error</option>
+                <option value="discarded">Descartados</option><option value="error">Error de lectura</option>
+            </select></div>
+            <button type="submit">Aplicar filtros</button><button id="clear-report" class="secondary" type="button">Limpiar</button>
+        </form>
+        <p id="report-feedback" class="notice report-feedback" role="status" hidden></p>
+    </section>
+    <div class="history-metrics report-metrics" aria-label="Resumen del reporte">
+        <div class="card metric"><span>Avisos filtrados</span><strong id="report-total">—</strong><small>Incluidos en el Excel</small></div>
+        <div class="card metric"><span>Validación insuficiente</span><strong id="report-insufficient">—</strong><small>No alcanzaron S/10 al validar</small></div>
+        <div class="card metric"><span>Pendientes de entrega</span><strong id="report-pending">—</strong><small>Respuestas por enviar a Tony’s Go</small></div>
+    </div>
+    <section class="card history-card" aria-labelledby="report-preview-title">
+        <div class="history-heading"><div><h2 id="report-preview-title">Vista previa</h2><p class="muted" id="report-description">Cargando resultados…</p></div><span class="report-badge">BBVA Empresas</span></div>
+        <div class="history-table-wrap"><table id="report-table"><thead><tr><th>Fecha del aviso</th><th>Nombre completo</th><th>Recibido</th><th>Acumulado</th><th>Faltante</th><th>Validación</th><th>Entrega</th></tr></thead><tbody id="report-rows"></tbody></table></div>
+        <div id="report-empty" class="history-empty" hidden><h3>No hay resultados</h3><p>Prueba con otras fechas o selecciona otro estado.</p></div>
+        <div class="history-pagination"><span id="report-count" class="muted"></span><div><button id="report-previous" class="secondary" type="button" disabled>Anterior</button><span id="report-page">Página 1</span><button id="report-next" class="secondary" type="button" disabled>Siguiente</button></div></div>
+    </section>
+    <p class="history-footnote">El Excel incluye todos los resultados filtrados, aunque ocupen varias páginas. El total recibido suma los pagos individuales; los acumulados se muestran como referencia. Hasta 50 000 registros por archivo.</p>
+    <noscript><p class="notice">Activa JavaScript para preparar y descargar el reporte.</p></noscript>
+</main></body></html>

@@ -1,5 +1,6 @@
 using Android.App;
 using Android.Service.Notification;
+using System.Threading.Channels;
 using TonysGo.Listener.Bbva;
 
 namespace TonysGo.YapeListener.Android;
@@ -9,16 +10,44 @@ namespace TonysGo.YapeListener.Android;
     Name = "com.tonysgo.yapelistener.YapeNotificationListenerService",
     Label = "Tony's Go BBVA Listener",
     Permission = "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
+    Enabled = true,
     Exported = true)]
 [IntentFilter(["android.service.notification.NotificationListenerService"])]
 public sealed class YapeNotificationListenerService : NotificationListenerService
 {
+    private static readonly Channel<BbvaNotificationRequest> Captures = Channel.CreateUnbounded<BbvaNotificationRequest>(new() { SingleReader = true });
+    private static int _consumerStarted;
+    public static bool Connected { get; private set; }
+
     public override void OnListenerConnected()
     {
         base.OnListenerConnected();
+        Connected = true;
+        // A system rebind can arrive before (or instead of) the boot broadcast.
+        if (!ListenerRuntimeService.Running) ListenerRuntimeService.EnsureStarted(this);
+        ListenerRuntimeService.ListenerChanged();
         ListenerDebugLog.Info(this, "Listener BBVA conectado.");
-        foreach (var notification in GetActiveNotifications() ?? []) ProcessNotification(notification);
-        BbvaHistory.RetryPending(this);
+        try { foreach (var notification in GetActiveNotifications() ?? []) ProcessNotification(notification); }
+        catch (Exception e) { ListenerDebugLog.Warning(this, $"Recuperación de avisos activos: {e.GetType().Name}."); }
+        _ = Task.Run(() =>
+        {
+            try { BbvaHistory.RetryPending(ApplicationContext!); }
+            catch (Exception e) { ListenerDebugLog.Error(ApplicationContext!, $"Recuperación de cola: {e.GetType().Name}."); }
+        });
+    }
+
+    public override void OnListenerDisconnected()
+    {
+        base.OnListenerDisconnected(); Connected = false;
+        ListenerDebugLog.Warning(this, "Android desconectó la escucha. Solicitando reconexión.");
+        ListenerRuntimeService.RequestRebind(this);
+        ListenerRuntimeService.ListenerChanged();
+    }
+    public override void OnDestroy()
+    {
+        Connected = false;
+        ListenerRuntimeService.ListenerChanged();
+        base.OnDestroy();
     }
 
     public override void OnNotificationPosted(StatusBarNotification? notification)
@@ -46,16 +75,37 @@ public sealed class YapeNotificationListenerService : NotificationListenerServic
             var request = new BbvaNotificationRequest(eventId, ListenerConfig.Load(this).DeviceId,
                 notification.PackageName, DateTimeOffset.FromUnixTimeMilliseconds(notification.PostTime),
                 Cut(title, 300), Cut(text, 2000), Cut(bigText, 4000));
-            // Keep the local record even when configuration is not ready or this isn't a payment.
-            var entry = BbvaHistory.Store(this).Capture(request);
-            ListenerConfig.SetLastStatus(this, $"Aviso BBVA capturado a las {DateTimeOffset.Now:HH:mm:ss}.");
-            ListenerDebugLog.Info(this, $"Aviso BBVA {eventId[..12]}: {entry.Payment.CodigoMotivo}.");
-            BbvaHistory.Enqueue(this, entry);
+            // Snapshot Android's message now, then commit off the callback thread in arrival order.
+            StartConsumer();
+            Captures.Writer.TryWrite(request);
         }
         catch (Exception exception)
         {
             ListenerDebugLog.Error(this, $"No se pudo guardar el aviso BBVA: {exception.GetType().Name}: {exception.Message}");
         }
+    }
+
+    private void StartConsumer()
+    {
+        if (Interlocked.CompareExchange(ref _consumerStarted, 1, 0) != 0) return;
+        var context = ApplicationContext!;
+        _ = Task.Run(async () =>
+        {
+            await foreach (var request in Captures.Reader.ReadAllAsync())
+            {
+                try
+                {
+                    var capture = BbvaHistory.Store(context).Capture(request);
+                    // SQLite commits the history and pending state before any alert or network request.
+                    ListenerConfig.SetLastStatus(context, $"Aviso BBVA guardado a las {DateTimeOffset.Now:HH:mm:ss}.");
+                    try { ListenerNotifications.Captured(context, capture.Entry); }
+                    catch (Exception e) { ListenerDebugLog.Warning(context, $"Aviso local: {e.GetType().Name}."); }
+                    BbvaHistory.Enqueue(context, capture.Entry);
+                    ListenerRuntimeService.RefreshNotice();
+                }
+                catch (Exception e) { ListenerDebugLog.Error(context, $"No se pudo guardar un aviso BBVA: {e.GetType().Name}."); }
+            }
+        });
     }
 
     private static string? Cut(string? value, int maximum) => value?.Length > maximum ? value[..maximum] : value;

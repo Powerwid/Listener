@@ -10,6 +10,8 @@ public sealed class ListenerDbContext(DbContextOptions<ListenerDbContext> option
     public DbSet<EvidenciaPago> EvidenciasPago => Set<EvidenciaPago>();
     public DbSet<EstadoSincronizacionCorreo> EstadoSincronizacionCorreo => Set<EstadoSincronizacionCorreo>();
     public DbSet<EventoAuditoria> EventosAuditoria => Set<EventoAuditoria>();
+    public DbSet<BbvaPaymentBalance> BbvaPaymentBalances => Set<BbvaPaymentBalance>();
+    public DbSet<BbvaPaymentValidation> BbvaPaymentValidations => Set<BbvaPaymentValidation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -13,7 +13,7 @@ public sealed class HistoryFilter : IValidatableObject
 {
     [StringLength(150)] public string? Search { get; set; }
     [RegularExpression("^(bbva|yape|correo)?$")] public string? Source { get; set; }
-    [RegularExpression("^(pending|sent|failed|discarded|error)?$")] public string? Status { get; set; }
+    [RegularExpression("^(pending|sent|failed|correct|insufficient|discarded|error)?$")] public string? Status { get; set; }
     public DateOnly? From { get; set; }
     public DateOnly? To { get; set; }
     [Range(1, 1_000_000)] public int Page { get; set; } = 1;
@@ -26,8 +26,8 @@ public sealed class HistoryFilter : IValidatableObject
 
 public sealed record HistoryItem(Guid Id, string Source, string? Name, decimal? Amount, string? Currency,
     string? Title, DateTimeOffset ReceivedAt, DateTimeOffset StoredAt, string? DeviceId,
-    string Classification, string Status, string StatusLabel, string? Reason);
-public sealed record HistorySummary(int Total, int BbvaPayments, int Pending, int Sent, int Discarded);
+    string Classification, string Status, string StatusLabel, string? Reason, BbvaValidationResult? Validation = null);
+public sealed record HistorySummary(int Total, int BbvaPayments, int Pending, int Sent, int Discarded, int Insufficient = 0);
 public sealed record HistoryPage(HistorySummary Summary, int Page, int PageSize, int Pages, IReadOnlyList<HistoryItem> Items);
 public sealed record HistoryDetail(HistoryItem Item, string? Text, string? ExpandedText);
 
@@ -70,24 +70,30 @@ public sealed class NotificationHistory(ListenerDbContext db, BbvaAbonoSender se
         }
         return filter.Status switch
         {
-            "pending" => Payments(rows).Where(x => !db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent)),
-            "sent" => Payments(rows).Where(x => db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent)),
-            "failed" => Payments(rows).Where(x => !db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent)
+            "pending" => Payments(rows).Where(x => !db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && (a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent || a.TipoEvento == BbvaAbonoDispatcher.ValidationDeliveredEvent))),
+            "sent" => Payments(rows).Where(x => db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && (a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent || a.TipoEvento == BbvaAbonoDispatcher.ValidationDeliveredEvent))),
+            "failed" => Payments(rows).Where(x => !db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && (a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent || a.TipoEvento == BbvaAbonoDispatcher.ValidationDeliveredEvent))
                 && db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.FailedEvent)),
+            "insufficient" => Payments(rows).Where(x => x.CodigoMotivo == BbvaPaymentLedger.InsufficientCode),
+            "correct" => Payments(rows).Where(x => db.BbvaPaymentValidations.Any(v => v.EventId == x.Id && v.Correct)),
             "discarded" => rows.Where(x => x.EstadoProcesamiento == EstadoProcesamientoCorreo.Descartado),
             "error" => rows.Where(x => x.EstadoProcesamiento == EstadoProcesamientoCorreo.Error),
             _ => rows
         };
     }
     private static IQueryable<CorreoProcesado> Payments(IQueryable<CorreoProcesado> rows) => rows.Where(x =>
-        x.VersionExtractor == BbvaNotificationService.Extractor && x.CodigoMotivo == "ABONO_BBVA_EXTRAIDO"
+        x.VersionExtractor == BbvaNotificationService.Extractor && (x.CodigoMotivo == "ABONO_BBVA_EXTRAIDO" || x.CodigoMotivo == BbvaPaymentLedger.InsufficientCode)
         && x.EstadoProcesamiento == EstadoProcesamientoCorreo.Procesado);
 
-    private sealed record Snapshot(CorreoProcesado Row, bool Sent, string? LastFailure);
-    private IQueryable<Snapshot> Project(IQueryable<CorreoProcesado> rows) => rows.Select(x => new Snapshot(x,
-        db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent),
-        db.EventosAuditoria.Where(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.FailedEvent)
-            .OrderByDescending(a => a.Fecha).ThenBy(a => a.Id).Select(a => a.CodigoMotivo).FirstOrDefault()));
+    private sealed record Snapshot(CorreoProcesado Row, BbvaPaymentValidation? Validation, bool Sent, string? LastFailure);
+    private IQueryable<Snapshot> Project(IQueryable<CorreoProcesado> rows) =>
+        from row in rows
+        join validation in db.BbvaPaymentValidations.AsNoTracking() on row.Id equals validation.EventId into validations
+        from validation in validations.DefaultIfEmpty()
+        select new Snapshot(row, validation,
+            db.EventosAuditoria.Any(a => a.CorreoProcesadoId == row.Id && (a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent || a.TipoEvento == BbvaAbonoDispatcher.ValidationDeliveredEvent)),
+            db.EventosAuditoria.Where(a => a.CorreoProcesadoId == row.Id && a.TipoEvento == BbvaAbonoDispatcher.FailedEvent)
+                .OrderByDescending(a => a.Fecha).ThenBy(a => a.Id).Select(a => a.CodigoMotivo).FirstOrDefault());
 
     public async Task<HistoryPage> ListAsync(HistoryFilter filter, CancellationToken ct)
     {
@@ -95,13 +101,14 @@ public sealed class NotificationHistory(ListenerDbContext db, BbvaAbonoSender se
         var total = await rows.CountAsync(ct);
         var payments = Payments(rows);
         var bbva = await payments.CountAsync(ct);
-        var sent = await payments.CountAsync(x => db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent), ct);
+        var sent = await payments.CountAsync(x => db.EventosAuditoria.Any(a => a.CorreoProcesadoId == x.Id && (a.TipoEvento == BbvaAbonoDispatcher.DeliveredEvent || a.TipoEvento == BbvaAbonoDispatcher.ValidationDeliveredEvent)), ct);
+        var insufficient = await payments.CountAsync(x => x.CodigoMotivo == BbvaPaymentLedger.InsufficientCode, ct);
         var discarded = await rows.CountAsync(x => x.EstadoProcesamiento == EstadoProcesamientoCorreo.Descartado, ct);
         var pages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
         var page = Math.Clamp(filter.Page, 1, pages);
         var records = await Project(rows.OrderByDescending(x => x.FechaRecepcion).ThenBy(x => x.Id)
             .Skip((page - 1) * PageSize).Take(PageSize)).ToListAsync(ct);
-        return new(new(total, bbva, bbva - sent, sent, discarded), page, PageSize, pages, records.Select(x => Map(x).Item).ToArray());
+        return new(new(total, bbva, bbva - sent, sent, discarded, insufficient), page, PageSize, pages, records.Select(x => Map(x).Item).ToArray());
     }
 
     public async Task<HistoryDetail?> FindAsync(Guid id, CancellationToken ct)
@@ -110,6 +117,13 @@ public sealed class NotificationHistory(ListenerDbContext db, BbvaAbonoSender se
         if (snapshot is null) return null;
         var data = Map(snapshot);
         return new(data.Item, data.Text, data.BigText);
+    }
+
+    public async Task<IReadOnlyList<HistoryItem>> ExportAsync(HistoryFilter filter, int limit, CancellationToken ct)
+    {
+        var records = await Project(Apply(filter).OrderBy(x => x.FechaRecepcion).ThenBy(x => x.Id)
+            .Take(limit + 1)).ToListAsync(ct);
+        return records.Select(x => Map(x).Item).ToArray();
     }
 
     private (HistoryItem Item, string? Text, string? BigText) Map(Snapshot snapshot)
@@ -131,7 +145,7 @@ public sealed class NotificationHistory(ListenerDbContext db, BbvaAbonoSender se
                     name = data?.Payment?.NombreCompleto; amount = data?.Payment?.Monto; currency = amount.HasValue ? "PEN" : null;
                     device = data?.Notification?.DeviceId; text = data?.Notification?.Text; bigText = data?.Notification?.BigText;
                     validPayment = data?.Payment is { EsAbono: true, NombreCompleto: { Length: > 0 }, Monto: > 0 }
-                        && row.CodigoMotivo == "ABONO_BBVA_EXTRAIDO" && row.EstadoProcesamiento == EstadoProcesamientoCorreo.Procesado;
+                        && (row.CodigoMotivo == "ABONO_BBVA_EXTRAIDO" || row.CodigoMotivo == BbvaPaymentLedger.InsufficientCode) && row.EstadoProcesamiento == EstadoProcesamientoCorreo.Procesado;
                 }
                 else if (source == "Yape")
                 {
@@ -147,24 +161,25 @@ public sealed class NotificationHistory(ListenerDbContext db, BbvaAbonoSender se
             }
         }
         catch (JsonException) { corrupt = true; }
+        var validation = snapshot.Validation is null ? null : BbvaPaymentLedger.Result(snapshot.Validation);
         var classification = row.EstadoProcesamiento switch
         {
             EstadoProcesamientoCorreo.Descartado => "Descartada",
             EstadoProcesamientoCorreo.Error => "Error de lectura",
             EstadoProcesamientoCorreo.Pendiente => "Por revisar",
-            _ => validPayment ? "Abono detectado" : "Datos extraídos"
+            _ => validation is { Correcto: false } ? "Monto insuficiente" : validation is { Correcto: true } ? "Validación correcta" : validPayment ? "Abono detectado" : "Datos extraídos"
         };
         var status = "history";
         var label = "Historial";
         if (validPayment)
         {
             status = snapshot.Sent ? "sent" : snapshot.LastFailure is not null ? "failed" : "pending";
-            label = snapshot.Sent ? "Entregado a Tony’s Go" : !sender.IsConfigured ? "Envío sin configurar"
+            label = snapshot.Sent ? validation is null ? "Entregado a Tony’s Go" : "Respuesta entregada a Tony’s Go" : !sender.IsConfigured ? "Envío sin configurar"
                 : snapshot.LastFailure is not null ? "Envío con error" : "Pendiente de entrega";
         }
         if (corrupt || row.EstadoProcesamiento == EstadoProcesamientoCorreo.Error)
         { status = "error"; label = "Revisar lectura"; }
         return (new(row.Id, source, name, amount, currency, row.Asunto, row.FechaRecepcion, row.FechaRegistro, device,
-            classification, status, label, corrupt ? "RESULTADO_GUARDADO_INVALIDO" : snapshot.Sent ? row.CodigoMotivo : snapshot.LastFailure ?? row.CodigoMotivo), text, bigText);
+            classification, status, label, corrupt ? "RESULTADO_GUARDADO_INVALIDO" : snapshot.Sent ? row.CodigoMotivo : snapshot.LastFailure ?? row.CodigoMotivo, validation), text, bigText);
     }
 }

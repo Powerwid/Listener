@@ -148,6 +148,7 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/acceso") || context.Request.Path.StartsWithSegments("/dispositivos")
         || context.Request.Path.StartsWithSegments("/historial")
+        || context.Request.Path.StartsWithSegments("/reportes")
         || context.Request.Path.StartsWithSegments("/api/v1/admin") || context.Request.Path.StartsWithSegments("/api/v1/devices"))
     {
         context.Response.Headers.CacheControl = "no-store";

@@ -22,6 +22,86 @@ namespace Listener.Api.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Listener.Api.Data.Entities.BbvaPaymentBalance", b =>
+                {
+                    b.Property<string>("PayerKey")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("PendingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("VersionFila")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("PayerKey");
+
+                    b.ToTable("BbvaPaymentBalances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BbvaBalance_Pending", "[PendingAmount] >= 0 AND [PendingAmount] < 10");
+                        });
+                });
+
+            modelBuilder.Entity("Listener.Api.Data.Entities.BbvaPaymentValidation", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AccumulatedAmount")
+                        .HasPrecision(20, 2)
+                        .HasColumnType("decimal(20,2)");
+
+                    b.Property<bool>("Correct")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("NotificationAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PayerKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<decimal>("ReceivedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("PayerKey", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("BbvaPaymentValidations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BbvaValidation_Amounts", "[ReceivedAmount] > 0 AND [AccumulatedAmount] >= [ReceivedAmount]");
+
+                            t.HasCheckConstraint("CK_BbvaValidation_Correct", "([Correct] = 1 AND [AccumulatedAmount] >= 10) OR ([Correct] = 0 AND [AccumulatedAmount] < 10)");
+                        });
+                });
+
             modelBuilder.Entity("Listener.Api.Data.Entities.CorreoProcesado", b =>
                 {
                     b.Property<Guid>("Id")
@@ -417,6 +497,21 @@ namespace Listener.Api.Data.Migrations
 
                             t.HasCheckConstraint("CK_Solicitudes_Simulacion", "[EsSimulacion] = 0 OR [Estado] <> 'Verificada'");
                         });
+                });
+
+            modelBuilder.Entity("Listener.Api.Data.Entities.BbvaPaymentValidation", b =>
+                {
+                    b.HasOne("Listener.Api.Data.Entities.CorreoProcesado", null)
+                        .WithOne()
+                        .HasForeignKey("Listener.Api.Data.Entities.BbvaPaymentValidation", "EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Listener.Api.Data.Entities.BbvaPaymentBalance", null)
+                        .WithMany()
+                        .HasForeignKey("PayerKey")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Listener.Api.Data.Entities.CorreoProcesado", b =>

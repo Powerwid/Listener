@@ -35,7 +35,7 @@ public class BbvaAbonoSenderTests
     public async Task FailedDeliveriesRemainUnconfirmed(HttpStatusCode status, string expected)
     {
         Assert.Equal(expected, await Sender(new CaptureHandler(status)).SendAsync(
-            new BbvaAbono(Guid.NewGuid(), "PERSONA PRUEBA", 1m, "PEN", DateTimeOffset.UtcNow), default));
+            new BbvaAbono(Guid.NewGuid(), "PERSONA PRUEBA", 10m, "PEN", DateTimeOffset.UtcNow), default));
     }
 
     [Theory]
@@ -47,7 +47,7 @@ public class BbvaAbonoSenderTests
         var sender = Sender(handler, url);
         Assert.False(sender.IsConfigured);
         Assert.Equal("ENVIO_NO_CONFIGURADO", await sender.SendAsync(new BbvaAbono(
-            Guid.NewGuid(), "PERSONA PRUEBA", 1m, "PEN", DateTimeOffset.UtcNow), default));
+            Guid.NewGuid(), "PERSONA PRUEBA", 10m, "PEN", DateTimeOffset.UtcNow), default));
         Assert.Null(handler.Body);
     }
 

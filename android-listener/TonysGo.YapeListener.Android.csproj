@@ -7,8 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationId>com.tonysgo.yapelistener</ApplicationId>
     <ApplicationTitle>Tony's Go BBVA Listener</ApplicationTitle>
-    <ApplicationVersion>3</ApplicationVersion>
-    <ApplicationDisplayVersion>1.2</ApplicationDisplayVersion>
+    <ApplicationVersion>7</ApplicationVersion>
+    <ApplicationDisplayVersion>1.4.2</ApplicationDisplayVersion>
+    <ListenerApkFileName>TonysGo-BBVA-Listener.apk</ListenerApkFileName>
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
@@ -17,6 +18,21 @@
     <PackageReference Include="Xamarin.GooglePlayServices.Code.Scanner" Version="116.1.0.16" />
     <Compile Include="../shared/BbvaNotifications.cs" Link="Bbva/BbvaNotifications.cs" />
     <Compile Include="../shared/BbvaHistoryStore.cs" Link="Bbva/BbvaHistoryStore.cs" />
+    <Compile Include="../shared/BbvaDeliveryRules.cs" Link="Bbva/BbvaDeliveryRules.cs" />
+    <Compile Include="../shared/ListenerRecoveryPlan.cs" Link="Bbva/ListenerRecoveryPlan.cs" />
     <Compile Include="../shared/DevicePairingContracts.cs" Link="Pairing/DevicePairingContracts.cs" />
   </ItemGroup>
+
+  <!-- Keep the installed application identity while giving the signed download a readable name. -->
+  <Target Name="CopyListenerApk" AfterTargets="_Sign"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(AndroidPackageFormat)' != 'aab' and Exists('$(ApkFileSigned)')">
+    <Copy SourceFiles="$(ApkFileSigned)" DestinationFiles="$(OutDir)$(ListenerApkFileName)" SkipUnchangedFiles="true" />
+    <ItemGroup><FileWrites Include="$(OutDir)$(ListenerApkFileName)" /></ItemGroup>
+  </Target>
+
+  <Target Name="CopyListenerApkFromBundle" AfterTargets="_CreateUniversalApkFromBundle"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(AndroidPackageFormat)' == 'aab' and $(_AndroidAdditionalPackageFormats.Contains('apk')) and Exists('$(ApkFileSigned)')">
+    <Copy SourceFiles="$(ApkFileSigned)" DestinationFiles="$(OutDir)$(ListenerApkFileName)" SkipUnchangedFiles="true" />
+    <ItemGroup><FileWrites Include="$(OutDir)$(ListenerApkFileName)" /></ItemGroup>
+  </Target>
 </Project>

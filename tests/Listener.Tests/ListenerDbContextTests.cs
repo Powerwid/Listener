@@ -12,11 +12,11 @@ public class ListenerDbContextTests
             .Options);
 
     [Fact]
-    public void ModelHasOnlyFiveListenerTables()
+    public void ModelIncludesListenerHistoryAndBbvaAccumulationTables()
     {
         using var db = CreateContext();
         var tables = db.Model.GetEntityTypes().Select(x => x.GetTableName()).Order().ToArray();
-        Assert.Equal(new[] { "CorreosProcesados", "EstadoSincronizacionCorreo", "EventosAuditoria", "EvidenciasPago", "SolicitudesVerificacion" }, tables);
+        Assert.Equal(new[] { "BbvaPaymentBalances", "BbvaPaymentValidations", "CorreosProcesados", "EstadoSincronizacionCorreo", "EventosAuditoria", "EvidenciasPago", "SolicitudesVerificacion" }, tables);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class ListenerDbContextTests
         var amount = request.FindProperty(nameof(SolicitudVerificacion.MontoEsperado))!;
         Assert.Equal(18, amount.GetPrecision());
         Assert.Equal(2, amount.GetScale());
-        foreach (var type in new[] { typeof(SolicitudVerificacion), typeof(CorreoProcesado), typeof(EvidenciaPago), typeof(EstadoSincronizacionCorreo) })
+        foreach (var type in new[] { typeof(SolicitudVerificacion), typeof(CorreoProcesado), typeof(EvidenciaPago), typeof(EstadoSincronizacionCorreo), typeof(BbvaPaymentBalance) })
             Assert.True(db.Model.FindEntityType(type)!.FindProperty("VersionFila")!.IsConcurrencyToken);
     }
 

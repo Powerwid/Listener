@@ -8,25 +8,18 @@ namespace TonysGo.YapeListener.Android;
 internal static class BbvaHistory
 {
     private static readonly object Gate = new();
-    private static BbvaHistoryStore? _store;
-    private static BbvaPendingUploads? _uploads;
-    public static BbvaHistoryStore Store(Context context)
+    private static BbvaLocalDatabase? _store;
+    public static BbvaLocalDatabase Store(Context context)
     {
         lock (Gate)
-            return _store ??= new BbvaHistoryStore(Path.Combine(context.FilesDir!.AbsolutePath, "bbva-history.json"));
-    }
-
-    public static BbvaPendingUploads Uploads(Context context)
-    {
-        lock (Gate)
-            return _uploads ??= new BbvaPendingUploads(Path.Combine(context.FilesDir!.AbsolutePath, "bbva-outbox"));
+            return _store ??= new BbvaLocalDatabase(context.ApplicationContext!);
     }
 
     public static void Enqueue(Context context, BbvaHistoryEntry entry)
     {
-        if (!entry.Payment.EsAbono || entry.Status == BbvaDeliveryStatus.StoredByListener) return;
-        Uploads(context).Add(entry.Notification);
+        if (!BbvaDeliveryRules.NeedsUpload(entry) || entry.Status == BbvaDeliveryStatus.Rejected) return;
         Schedule(context, entry.Notification.NotificationKey);
+        ListenerRuntimeService.KickUploads();
     }
 
     private static void Schedule(Context context, string eventId)
@@ -41,15 +34,15 @@ internal static class BbvaHistory
         WorkManager.GetInstance(context).EnqueueUniqueWork($"bbva-{eventId}", ExistingWorkPolicy.Keep!, work);
     }
 
-    public static void RetryPending(Context context)
+    public static void RetryPending(Context context, bool includeRejected = false)
     {
-        foreach (var entry in Store(context).Read().Where(x => x.Payment.EsAbono && x.Status != BbvaDeliveryStatus.StoredByListener))
+        var configured = ListenerConfig.Load(context).IsValid;
+        foreach (var entry in Store(context).Pending(retryRejected: includeRejected))
         {
-            Uploads(context).Add(entry.Notification);
-            if (entry.Status != BbvaDeliveryStatus.Sending)
+            if (includeRejected && entry.Status != BbvaDeliveryStatus.Sending || entry.Status == BbvaDeliveryStatus.ConfigurationRequired && configured)
                 Store(context).SetStatus(entry.Notification.NotificationKey, BbvaDeliveryStatus.Pending, "Pendiente de envio a Listener.");
+            Schedule(context, entry.Notification.NotificationKey);
         }
-        // Older uploads remain pending even after they leave the last-200 history window.
-        foreach (var queued in Uploads(context).Read()) Schedule(context, queued.Notification.NotificationKey);
+        ListenerRuntimeService.KickUploads();
     }
 }

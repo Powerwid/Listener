@@ -12,13 +12,13 @@ using TonysGo.Listener.Pairing;
 
 namespace TonysGo.YapeListener.Android;
 
-[Activity(Label = "Tony's Go BBVA Listener", MainLauncher = true, Exported = true,
-    Theme = "@android:style/Theme.Material.Light.NoActionBar")]
-public sealed class MainActivity : Activity
+[Activity(Label = "Tony's Go BBVA Listener", Icon = "@mipmap/ic_launcher", MainLauncher = true, Exported = true,
+    Theme = "@style/ListenerTheme")]
+public sealed partial class MainActivity : Activity
 {
     private Button? _linkButton;
-    private TextView? _status, _connectionResult, _debugLog, _summary;
-    private View? _historyPane, _configurationPane;
+    private TextView? _status, _connectionResult, _debugLog, _summary, _serviceState;
+    private View? _historyPane, _configurationPane, _servicePane;
     private BbvaHistoryAdapter? _adapter;
     private long _historyRevision = -1;
     private CancellationTokenSource? _refreshCancellation;
@@ -27,36 +27,8 @@ public sealed class MainActivity : Activity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
-        var root = new LinearLayout(this) { Orientation = Orientation.Vertical };
-        root.SetPadding(Dp(16), Dp(20), Dp(16), Dp(12));
-        if (OperatingSystem.IsAndroidVersionAtLeast(30))
-            root.SetOnApplyWindowInsetsListener(new SystemBarsInsets(Dp(16), Dp(20), Dp(12)));
-        else
-            root.SetFitsSystemWindows(true);
-        root.SetBackgroundColor(Color.Rgb(244, 247, 250));
-        root.AddView(Label("Tony's Go · BBVA", 24, true));
-        root.AddView(Label("Notificaciones y abonos recibidos", 14));
-        var tabs = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-        var historyTab = ActionButton("Historial BBVA");
-        var configurationTab = ActionButton("Conexión");
-        tabs.AddView(historyTab, new LinearLayout.LayoutParams(0, Dp(52), 1));
-        tabs.AddView(configurationTab, new LinearLayout.LayoutParams(0, Dp(52), 1));
-        root.AddView(tabs);
-        _historyPane = CreateHistoryPane();
-        _configurationPane = CreateConfigurationPane();
-        root.AddView(_historyPane, new LinearLayout.LayoutParams(-1, 0, 1));
-        root.AddView(_configurationPane, new LinearLayout.LayoutParams(-1, 0, 1));
-        void SelectTab(bool history)
-        {
-            _historyPane.Visibility = history ? ViewStates.Visible : ViewStates.Gone;
-            _configurationPane.Visibility = history ? ViewStates.Gone : ViewStates.Visible;
-            historyTab.SetTextColor(history ? Color.Rgb(0, 92, 144) : Color.DarkGray);
-            configurationTab.SetTextColor(history ? Color.DarkGray : Color.Rgb(0, 92, 144));
-        }
-        historyTab.Click += (_, _) => SelectTab(true);
-        configurationTab.Click += (_, _) => SelectTab(false);
-        SelectTab(true);
-        SetContentView(root);
+        BuildInterface();
+        SelectPage(savedInstanceState?.GetInt("listener-page", 0) ?? 0);
         if (OperatingSystem.IsAndroidVersionAtLeast(30))
         {
             var appearance = (int)(WindowInsetsControllerAppearance.LightStatusBars | WindowInsetsControllerAppearance.LightNavigationBars);
@@ -65,25 +37,33 @@ public sealed class MainActivity : Activity
         UpdateStatus();
     }
 
+    protected override void OnSaveInstanceState(Bundle outState)
+    {
+        outState.PutInt("listener-page", _selectedPage);
+        base.OnSaveInstanceState(outState);
+    }
+
     private View CreateHistoryPane()
     {
         var pane = new LinearLayout(this) { Orientation = Orientation.Vertical };
+        pane.SetPadding(Dp(18), Dp(8), Dp(18), 0);
+        pane.AddView(Label("Historial de BBVA", 23, true));
         _summary = Label("", 14);
         _summary.SetPadding(0, Dp(12), 0, Dp(8));
         pane.AddView(_summary);
         var retry = ActionButton("Reintentar envíos pendientes");
         retry.Click += (_, _) =>
         {
-            BbvaHistory.RetryPending(this);
+            BbvaHistory.RetryPending(this, includeRejected: true);
             UpdateStatus();
             Toast.MakeText(this, "Se reintentará el envío de los abonos pendientes.", ToastLength.Short)?.Show();
         };
-        pane.AddView(retry);
+        ListenerUi.Add(pane, retry, 4, 8);
         pane.AddView(Label("Toca un aviso para ver el mensaje original.\nLa recarga se valida en Tony's Go.", 12));
         _adapter = new BbvaHistoryAdapter(this);
-        var list = new ListView(this) { Adapter = _adapter, DividerHeight = Dp(8) };
+        var list = new ListView(this) { Adapter = _adapter, Divider = new global::Android.Graphics.Drawables.ColorDrawable(Color.Transparent), DividerHeight = Dp(8) };
         list.ItemClick += (_, args) => ShowNotification(_adapter[args.Position]);
-        var empty = Label("Todavía no hay notificaciones de BBVA Empresas.\n\nHabilita el acceso en Conexión. Los avisos se conservarán aquí aunque no haya conexión.", 16);
+        var empty = Label("Todavía no hay avisos de BBVA.\n\nConecta este celular y activa la lectura desde Ajustes. Los avisos captados quedan guardados aunque no haya internet.", 16);
         empty.SetPadding(Dp(8), Dp(32), Dp(8), Dp(8));
         pane.AddView(empty);
         pane.AddView(list, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -95,46 +75,105 @@ public sealed class MainActivity : Activity
     {
         var content = new LinearLayout(this) { Orientation = Orientation.Vertical };
         content.SetPadding(0, Dp(16), 0, 0);
-        content.AddView(Label("Vincula este teléfono", 22, true));
+        content.AddView(Label("Conecta este celular", 20, true));
         content.AddView(Label("En la web de Listener, entra como administrador y genera un QR. Escanéalo aquí para conectar automáticamente este teléfono.", 15));
         _linkButton = ActionButton("Escanear QR de vinculación");
         _linkButton.Click += async (_, _) => await LinkAsync();
-        content.AddView(_linkButton);
+        ListenerUi.Add(content, _linkButton, 14, 10);
         var permissions = ActionButton("Abrir acceso a notificaciones");
         permissions.Click += (_, _) => StartActivity(new Intent(Settings.ActionNotificationListenerSettings));
-        content.AddView(permissions);
+        ListenerUi.Add(content, permissions, 0, 10);
         var test = ActionButton("Probar conexión con Listener");
+        _checkButton = test;
         test.Click += async (_, _) => await TestConnectionAsync(test);
-        content.AddView(test);
+        ListenerUi.Add(content, test, 0, 10);
         _connectionResult = Label("", 13);
         _connectionResult.SetTextIsSelectable(true);
         content.AddView(_connectionResult);
-        _status = Label("", 14);
-        content.AddView(_status);
-        content.AddView(Label("Diagnóstico de conexión", 18, true));
-        var clear = ActionButton("Limpiar diagnóstico");
-        clear.Click += (_, _) => { ListenerDebugLog.Clear(this); UpdateStatus(); };
-        content.AddView(clear);
-        content.AddView(Label("El historial BBVA se conserva al limpiar el diagnóstico.", 12));
-        _debugLog = Label("", 11);
-        _debugLog.SetTextIsSelectable(true);
-        content.AddView(_debugLog);
         var scroll = new ScrollView(this);
         scroll.AddView(content);
         return scroll;
     }
 
+    private View CreateServicePane()
+    {
+        var content = new LinearLayout(this) { Orientation = Orientation.Vertical };
+        content.SetPadding(0, Dp(16), 0, 0);
+        content.AddView(Label("Permisos y funcionamiento", 20, true));
+        content.AddView(Label("Listener mantiene un servicio visible para seguir recibiendo BBVA aunque cierres esta pantalla. Los avisos se guardan antes de intentar enviarlos.", 14));
+        _setupHint = Label("", 14);
+        ListenerUi.Add(content, _setupHint, 12, 6);
+        var reactivate = ActionButton("Comprobar y reactivar escucha");
+        reactivate.Click += (_, _) => ReactivateReading();
+        ListenerUi.Add(content, reactivate, 10, 10);
+        var access = ActionButton("Permitir acceso a notificaciones BBVA");
+        access.Click += (_, _) => StartActivity(new Intent(Settings.ActionNotificationListenerSettings));
+        ListenerUi.Add(content, access, 0, 10);
+        var battery = ActionButton("Permitir batería sin restricciones");
+        battery.Click += (_, _) =>
+        {
+            var power = (PowerManager)GetSystemService(PowerService)!;
+            if (!power.IsIgnoringBatteryOptimizations(PackageName!))
+                StartActivity(new Intent(Settings.ActionRequestIgnoreBatteryOptimizations, global::Android.Net.Uri.Parse("package:" + PackageName)));
+            else Toast.MakeText(this, "Listener ya está excluido de la optimización de batería.", ToastLength.Short)?.Show();
+        };
+        ListenerUi.Add(content, battery, 0, 10);
+        var appSettings = ActionButton("Abrir ajustes de inicio automático");
+        appSettings.Click += (_, _) => ShowStartupGuide();
+        ListenerUi.Add(content, appSettings, 0, 10);
+        content.AddView(Label("Si tu teléfono ofrece Inicio automático, actívalo para Listener. Al reiniciar el equipo, desbloquéalo una vez para que Android habilite los datos de las aplicaciones.", 12));
+        ListenerUi.Add(content, Label("Avisos de captura", 20, true), 18, 6);
+        var alerts = new CheckBox(this) { Text = "Avisarme cuando se capture un abono", Checked = ListenerNotifications.CaptureEnabled(this) };
+        alerts.CheckedChange += (_, e) => ListenerNotifications.SetCaptureEnabled(this, e.IsChecked);
+        content.AddView(alerts);
+        var permission = ActionButton("Permitir avisos de Listener");
+        permission.Click += (_, _) => RequestAlertPermission(true); ListenerUi.Add(content, permission, 10, 10);
+        var test = ActionButton("Probar aviso local");
+        test.Click += (_, _) =>
+        {
+            if (!ListenerNotifications.Allowed(this)) { RequestAlertPermission(true); return; }
+            ListenerNotifications.Test(this);
+        };
+        ListenerUi.Add(content, test, 0, 10);
+        content.AddView(Label("BBVA capturado: ya está guardado en este teléfono.\nRecibido en la web: el servidor confirmó la recepción.\n\nForzar detención o retirar permisos desde Android detiene la aplicación hasta que la vuelvas a abrir.", 12));
+        var scroll = new ScrollView(this); scroll.AddView(content); return scroll;
+    }
+
+    private void RequestAlertPermission(bool explicitRequest)
+    {
+        var preferences = GetSharedPreferences("listener_runtime", FileCreationMode.Private)!;
+        if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission("android.permission.POST_NOTIFICATIONS") != global::Android.Content.PM.Permission.Granted)
+        {
+            var asked = preferences.GetBoolean("asked_notifications", false);
+            if (!asked || explicitRequest && ShouldShowRequestPermissionRationale("android.permission.POST_NOTIFICATIONS"))
+            {
+                preferences.Edit()!.PutBoolean("asked_notifications", true)!.Apply();
+                RequestPermissions(["android.permission.POST_NOTIFICATIONS"], 7301);
+                return;
+            }
+            if (!explicitRequest) return;
+        }
+        if (explicitRequest) StartActivity(new Intent(Settings.ActionAppNotificationSettings).PutExtra(Settings.ExtraAppPackage, PackageName));
+    }
+
     protected override void OnResume()
     {
         base.OnResume();
+        _screenVisible = true;
+        ListenerRuntimeService.EnsureStarted(this);
+        ListenerRecoveryWorker.Schedule(this);
+        RequestAlertPermission(false);
         UpdateStatus();
         _refreshCancellation?.Cancel();
         _refreshCancellation = new CancellationTokenSource();
+        _nextCheck = DateTimeOffset.MinValue;
+        CheckWebIfNeeded();
         _ = RefreshAsync(_refreshCancellation.Token);
     }
 
     protected override void OnPause()
     {
+        _screenVisible = false;
         _refreshCancellation?.Cancel();
         _refreshCancellation?.Dispose();
         _refreshCancellation = null;
@@ -143,6 +182,8 @@ public sealed class MainActivity : Activity
 
     private async Task LinkAsync()
     {
+        if (_linking) return;
+        _linking = true;
         _linkButton!.Enabled = false;
         try
         {
@@ -165,6 +206,8 @@ public sealed class MainActivity : Activity
             if (!await confirm.Task) { _connectionResult.Text = "Vinculación cancelada."; return; }
             _connectionResult.Text = "Vinculando el teléfono…";
             await DevicePairingClient.PairAsync(this, qr);
+            _webState = WebState.Unknown;
+            _nextCheck = DateTimeOffset.MinValue;
             _connectionResult.Text = "Teléfono vinculado. Los abonos pendientes se enviarán automáticamente.";
             ListenerDebugLog.Info(this, "Vinculación QR completada.");
         }
@@ -174,37 +217,14 @@ public sealed class MainActivity : Activity
                 : "No se pudo completar la vinculación. Comprueba la conexión y genera un nuevo QR.";
             ListenerDebugLog.Warning(this, $"Vinculación QR: {exception.GetType().Name}.");
         }
-        finally { if (!IsFinishing && !IsDestroyed) { _linkButton.Enabled = true; UpdateStatus(); } }
+        finally { _linking = false; if (!IsFinishing && !IsDestroyed) { _linkButton.Enabled = true; UpdateStatus(); CheckWebIfNeeded(); } }
     }
 
     private async Task TestConnectionAsync(Button button)
     {
-        var settings = ListenerConfig.Load(this);
-        if (!settings.IsValid) { _connectionResult!.Text = "Escanea primero el QR de vinculación generado en la web."; return; }
         button.Enabled = false;
-        _connectionResult!.Text = "Consultando Listener...";
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{settings.Endpoint}/api/v1/bbva/connection");
-            request.Headers.Add("X-Listener-Api-Key", settings.ApiKey);
-            using var response = await ConnectionClient.SendAsync(request);
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                var cleared = ListenerConfig.ClearPairing(this, settings.ApiKey);
-                _connectionResult.Text = cleared ? "El acceso ya no está activo. Genera un nuevo QR en la web y vuelve a vincular este teléfono."
-                    : "La vinculación se actualizó durante la prueba. Vuelve a comprobar la conexión.";
-            }
-            else _connectionResult.Text = response.IsSuccessStatusCode ? "Conexión correcta. Listener reconoce este teléfono."
-                : $"Listener respondió HTTP {(int)response.StatusCode}. Intenta nuevamente en unos momentos.";
-            ListenerDebugLog.Info(this, $"Prueba de conexión BBVA: HTTP {(int)response.StatusCode}.");
-            UpdateStatus();
-        }
-        catch (Exception exception)
-        {
-            _connectionResult.Text = $"Sin respuesta: {exception.GetType().Name}: {exception.Message}";
-            ListenerDebugLog.Warning(this, $"Prueba de conexión: {exception.GetType().Name}.");
-        }
-        finally { button.Enabled = true; }
+        try { await CheckWebAsync(true); }
+        finally { if (!IsFinishing && !IsDestroyed) button.Enabled = true; }
     }
 
     private void UpdateStatus()
@@ -218,58 +238,52 @@ public sealed class MainActivity : Activity
                 $"Acceso a notificaciones: {(permission ? "habilitado" : "pendiente")}\n\n{ListenerConfig.LastStatus(this)}\n\nSe capturan únicamente avisos de BBVA Empresas.";
         if (_debugLog is not null) _debugLog.Text = ListenerDebugLog.Read(this);
         var store = BbvaHistory.Store(this);
-        var entries = store.Read();
-        var pending = entries.Count(x => x.Payment.EsAbono && x.Status != BbvaDeliveryStatus.StoredByListener);
+        var pending = store.PendingCount;
+        UpdateDashboard(settings, permission, pending, store);
+        if (_serviceState is not null)
+        {
+            var power = (PowerManager)GetSystemService(PowerService)!;
+            _serviceState.Text = $"Lectura de avisos BBVA: {(YapeNotificationListenerService.Connected ? "activa" : !permission ? "falta permiso" : ListenerRuntimeService.NeedsHelp ? "requiere reparar acceso" : "reconectando con Android")}\n" +
+                $"Servicio continuo: {(ListenerRuntimeService.Running ? "en ejecución" : "no está activo")}\n" +
+                $"Avisos de Listener: {(ListenerNotifications.Allowed(this) ? "permitidos" : "bloqueados en Android")}\n" +
+                $"Batería: {(power.IsIgnoringBatteryOptimizations(PackageName!) ? "sin optimización" : "revisa las restricciones")}\n" +
+                $"Abonos guardados pendientes: {pending}" + (ListenerRuntimeService.LastError is { } error ? "\n" + error : "");
+        }
         var pendingLabel = pending == 1 ? "1 envío pendiente" : $"{pending} envíos pendientes";
-        _summary!.Text = $"{entries.Count} avisos guardados · {pendingLabel}\n" +
-            (!permission ? "Habilita el acceso a notificaciones en Conexión." :
-                !configured ? "Vincula este teléfono desde Conexión para enviar los abonos." : "Acceso habilitado · últimas 200 notificaciones");
+        _summary!.Text = $"{pendingLabel} · se muestran los últimos 200 avisos\n" +
+            (!permission ? "Activa la lectura de BBVA desde Inicio o Ajustes." :
+                !configured ? "Conecta este celular desde Ajustes para enviar los abonos." : "Los avisos anteriores siguen guardados en este celular.");
         if (store.Revision == _historyRevision) return;
+        var entries = store.Read();
         _historyRevision = store.Revision;
         _adapter!.Replace(entries);
+        UpdateLatestNotice(entries.FirstOrDefault());
     }
 
     private void ShowNotification(BbvaHistoryEntry entry)
     {
-        var notification = entry.Notification;
-        var body = $"Fecha del aviso: {notification.PostedAt.ToLocalTime():dd/MM/yyyy HH:mm:ss}\n" +
-            $"Nombre: {entry.Payment.NombreCompleto ?? "No extraído"}\nMonto: {Money(entry.Payment.Monto)}\n" +
-            $"Estado: {StatusLabel(entry.Status)}\n{entry.Detail}\nIntentos de envío: {entry.Attempts}\n\n" +
-            $"Título original:\n{notification.Title ?? "(vacío)"}\n\nMensaje original:\n{notification.Text ?? "(vacío)"}\n\n" +
-            $"Mensaje ampliado:\n{notification.BigText ?? "(vacío)"}\n\nMotivo: {entry.Payment.CodigoMotivo}\nEvento: {notification.NotificationKey}";
-        var text = Label(body, 15);
-        text.SetPadding(Dp(18), Dp(12), Dp(18), Dp(12));
-        text.SetTextIsSelectable(true);
-        var scroll = new ScrollView(this);
-        scroll.AddView(text);
-        new AlertDialog.Builder(this)!.SetTitle(notification.Title ?? "Aviso BBVA Empresas")!
-            .SetView(scroll)!.SetPositiveButton("Cerrar", (_, _) => { })!.Show();
+        ShowFriendlyNotification(entry);
     }
 
     internal static string Money(decimal? amount) => amount is decimal value
         ? $"S/ {value.ToString("N2", CultureInfo.GetCultureInfo("es-PE"))}" : "Sin importe";
     internal static string StatusLabel(BbvaDeliveryStatus status) => status switch
     {
-        BbvaDeliveryStatus.StoredByListener => "Recibido en Listener",
-        BbvaDeliveryStatus.Pending => "Pendiente de envío",
-        BbvaDeliveryStatus.Sending => "Enviando a Listener…",
-        BbvaDeliveryStatus.Retry => "Esperando reintento",
-        BbvaDeliveryStatus.Rejected => "Envío rechazado",
-        BbvaDeliveryStatus.ConfigurationRequired => "Teléfono sin vincular",
-        _ => "Solo historial · sin abono reconocido"
+        BbvaDeliveryStatus.StoredByListener => "Recibido en la web de Listener",
+        BbvaDeliveryStatus.Pending => "Guardado · por enviar",
+        BbvaDeliveryStatus.Sending => "Enviando a la web…",
+        BbvaDeliveryStatus.Retry => "Guardado · volveremos a intentar",
+        BbvaDeliveryStatus.Rejected => "Guardado · necesita revisión",
+        BbvaDeliveryStatus.ConfigurationRequired => "Guardado · falta conectar con QR",
+        _ => "Aviso informativo · solo historial"
     };
     private TextView Label(string text, float size, bool bold = false)
     {
-        var label = new TextView(this) { Text = text, TextSize = size };
-        label.SetTextColor(Color.Rgb(33, 48, 65));
-        if (bold) label.SetTypeface(null, TypefaceStyle.Bold);
-        return label;
+        return ListenerUi.Text(this, text, size, bold);
     }
     private Button ActionButton(string text)
     {
-        var button = new Button(this) { Text = text };
-        button.SetAllCaps(false);
-        return button;
+        return ListenerUi.Button(this, text);
     }
     private int Dp(int value) => (int)(value * Resources!.DisplayMetrics!.Density);
     private async Task RefreshAsync(CancellationToken token)
@@ -279,7 +293,7 @@ public sealed class MainActivity : Activity
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), token);
-                RunOnUiThread(UpdateStatus);
+                RunOnUiThread(() => { if (_screenVisible && !IsFinishing && !IsDestroyed) { UpdateStatus(); CheckWebIfNeeded(); } });
             }
         }
         catch (System.OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -315,11 +329,12 @@ internal sealed class BbvaHistoryAdapter(Context context) : BaseAdapter<BbvaHist
             row = new LinearLayout(context) { Orientation = Orientation.Vertical };
             var padding = (int)(14 * context.Resources!.DisplayMetrics!.Density);
             row.SetPadding(padding, padding, padding, padding);
-            row.SetBackgroundColor(Color.White);
+            row.Background = ListenerUi.Shape(context, ListenerUi.Surface, 18, true);
             foreach (var size in new float[] { 16, 21, 13, 12 })
             {
                 var label = new TextView(context) { TextSize = size };
-                label.SetTextColor(Color.Rgb(33, 48, 65));
+                label.SetTextColor(ListenerUi.Ink);
+                label.SetLineSpacing(ListenerUi.Dp(context, 2), 1);
                 row.AddView(label);
             }
             ((TextView)row.GetChildAt(0)!).SetTypeface(null, TypefaceStyle.Bold);
@@ -329,8 +344,11 @@ internal sealed class BbvaHistoryAdapter(Context context) : BaseAdapter<BbvaHist
         ((TextView)row.GetChildAt(1)!).Text = MainActivity.Money(entry.Payment.Monto);
         var status = (TextView)row.GetChildAt(2)!;
         status.Text = MainActivity.StatusLabel(entry.Status);
-        status.SetTextColor(entry.Status == BbvaDeliveryStatus.StoredByListener ? Color.Rgb(0, 112, 92) : Color.Rgb(83, 91, 103));
+        status.SetTextColor(entry.Status == BbvaDeliveryStatus.StoredByListener ? ListenerUi.Green
+            : entry.Status == BbvaDeliveryStatus.Rejected ? ListenerUi.Red
+            : entry.Status == BbvaDeliveryStatus.HistoryOnly ? ListenerUi.Muted : ListenerUi.Amber);
         ((TextView)row.GetChildAt(3)!).Text = entry.Notification.PostedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss");
+        ((TextView)row.GetChildAt(3)!).SetTextColor(ListenerUi.Muted);
         return row;
     }
 }
